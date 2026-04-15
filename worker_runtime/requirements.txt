@@ -1,0 +1,21 @@
+# Worker runtime dependencies (2080 desktop).
+# Install on the RTX 2080 host with CUDA 11.8 matching toolkit:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#   pip install -r worker_runtime/requirements.txt
+
+# API
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.0
+
+# Inference (Phase 1d+)
+# torch>=2.1                   # install separately via CUDA-matched wheel
+diffusers>=0.30
+transformers>=4.40
+accelerate>=0.25
+safetensors>=0.4
+
+# Utility
+huggingface-hub>=0.20
+Pillow>=10.0
+numpy>=1.24

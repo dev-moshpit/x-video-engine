@@ -1,0 +1,36 @@
+# Engine default configuration.
+
+engine:
+  version: "0.0.1"
+  default_mode: "t2v"
+  default_resolution: "720p"
+  default_fps: 24
+  default_aspect_ratio: "16:9"
+  default_duration_sec: 5.0
+
+reranker:
+  enabled: true
+  default_num_candidates: 1          # 1 = no reranking, just one take
+  hero_num_candidates: 4
+  clip_model: "ViT-L-14"
+  clip_device: "cpu"
+  weights:
+    prompt_alignment: 0.25
+    subject_consistency: 0.20
+    motion_smoothness: 0.15
+    artifact_rate: 0.15
+    camera_obedience: 0.10
+    reference_similarity: 0.15
+
+cleanup:
+  enabled: false                     # phase 6 feature
+  enable_sr: false
+  enable_face_restore: false
+  enable_deflicker: false
+
+audio:
+  enabled: false                     # phase 7 feature
+
+planner:
+  provider: "anthropic"              # anthropic | local_qwen
+  model: "claude-sonnet-4-6"

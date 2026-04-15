@@ -1,0 +1,84 @@
+# Backend endpoints and operational config.
+# The router reads this to know where to dispatch jobs.
+#
+# LAN topology: laptop (orchestrator) + RTX 2080 desktop (worker).
+# Set endpoint to http://<2080-lan-ip>:<port> once the worker is running.
+
+workers:
+  wan21_t2v:
+    endpoint: null              # e.g. http://192.168.1.42:8080
+    auth_token_env: "LAN_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 600
+
+  sdxl_image:
+    endpoint: null              # same 2080, shared port or second service
+    auth_token_env: "LAN_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 180
+
+  wan22_ti2v:
+    endpoint: null              # EXPERIMENTAL: enable only after patience testing
+    auth_token_env: "LAN_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 1800           # 30 min cap for CPU-offloaded inference
+
+  wan22_t2v:
+    endpoint: null
+    auth_token_env: "WAN22_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 900
+
+  wan22_i2v:
+    endpoint: null
+    auth_token_env: "WAN22_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 900
+
+  hunyuan15_t2v:
+    endpoint: null
+    auth_token_env: "HUNYUAN_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 900
+
+  hunyuan15_i2v:
+    endpoint: null
+    auth_token_env: "HUNYUAN_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 900
+
+  omniweaving:
+    endpoint: null
+    auth_token_env: "OMNIWEAVING_WORKER_TOKEN"
+    max_concurrent: 1
+    timeout_sec: 900
+
+  ltx_keyframe:
+    endpoint: null
+    auth_token_env: "LTX_WORKER_TOKEN"
+    max_concurrent: 2
+    timeout_sec: 600
+
+  ltx_control:
+    endpoint: null
+    auth_token_env: "LTX_WORKER_TOKEN"
+    max_concurrent: 2
+    timeout_sec: 600
+
+  ltx_extend:
+    endpoint: null
+    auth_token_env: "LTX_WORKER_TOKEN"
+    max_concurrent: 2
+    timeout_sec: 600
+
+# Object storage for reference packs and outputs.
+storage:
+  provider: "local"             # local | s3 | r2 | minio
+  local_root: "./cache"
+  s3_bucket: null
+  s3_region: null
+
+# Global budget caps (defense against runaway jobs).
+budget:
+  max_cost_per_generation_usd: 1.00
+  max_cost_per_day_usd: 10.00
