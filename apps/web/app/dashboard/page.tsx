@@ -1,9 +1,18 @@
+import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export default async function DashboardPage() {
-  // The middleware (apps/web/middleware.ts) protects this route, so by
-  // the time we render here the user is authenticated.
+  // Defense-in-depth auth gate. Middleware also protects this route
+  // (see apps/web/middleware.ts), but Clerk's keyless dev mode
+  // short-circuits the middleware callback to surface its claim-keys
+  // banner. A server-side check here makes the gate work in both
+  // keyless and claimed modes.
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in?redirect_url=/dashboard");
+  }
+
   const user = await currentUser();
   const display =
     user?.firstName ??
