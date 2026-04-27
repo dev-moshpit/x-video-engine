@@ -1,0 +1,21 @@
+# SaaS render worker — Python process.
+#
+# The worker is the ONLY process that imports
+# xvideo.prompt_native.plan_renderer_bridge (heavy: SDXL + parallax).
+# Install both this file AND the project root requirements.txt into
+# the same venv:
+#
+#     py -3.11 -m venv .venv
+#     .venv\Scripts\activate
+#     pip install -r requirements.txt              # root: xvideo deps
+#     pip install -r apps/worker/requirements.txt  # worker-only deps
+
+# Queue + storage
+redis>=5.0
+boto3>=1.34
+
+# Shared schemas (Pydantic models on the wire)
+pydantic>=2.0
+
+# Tests
+pytest>=8.0

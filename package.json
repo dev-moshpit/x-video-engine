@@ -1,0 +1,19 @@
+{
+  "name": "x-video-engine",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @xve/web dev",
+    "build:web": "pnpm --filter @xve/web build",
+    "typecheck:web": "pnpm --filter @xve/web typecheck",
+    "dev:api": "py -3.11 -m uvicorn app.main:app --reload --port 8000 --app-dir apps/api",
+    "dev:worker": "py -3.11 apps/worker/main.py",
+    "dev:infra": "docker compose -f docker-compose.dev.yaml up -d",
+    "dev:infra:down": "docker compose -f docker-compose.dev.yaml down",
+    "test:api": "py -3.11 -m pytest tests/api"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

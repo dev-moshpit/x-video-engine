@@ -5,6 +5,7 @@ __pycache__/
 venv/
 env/
 .env
+.env.local
 cache/
 *.mp4
 *.webm
@@ -17,3 +18,12 @@ configs/backends.local.yaml
 *.egg-info/
 build/
 dist/
+
+# SaaS layer (apps/)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.pnpm-store/
+.turbo/
+.pytest_cache/

@@ -1,0 +1,65 @@
+# Local-dev infrastructure for the SaaS layer.
+#
+# Usage:
+#   pnpm dev:infra              # bring up postgres + redis + minio
+#   pnpm dev:infra:down         # tear down (volumes persist)
+#
+# Endpoints once running:
+#   Postgres   localhost:5432   user=saas pass=saas db=saas
+#   Redis      localhost:6379
+#   MinIO API  localhost:9000   minioadmin / minioadmin
+#   MinIO UI   localhost:9001
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: xve_postgres
+    environment:
+      POSTGRES_USER: saas
+      POSTGRES_PASSWORD: saas
+      POSTGRES_DB: saas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: xve_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: xve_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
