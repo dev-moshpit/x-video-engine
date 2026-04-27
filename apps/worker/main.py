@@ -41,6 +41,7 @@ from apps.worker.queue import (  # noqa: E402
 )
 from apps.worker.render_adapters import render_for_template  # noqa: E402
 from apps.worker.schemas import RenderJobRequest, RenderStage  # noqa: E402
+from apps.worker.storage import upload_render_mp4  # noqa: E402
 
 
 logging.basicConfig(
@@ -62,6 +63,7 @@ def run_one_job(req: RenderJobRequest) -> None:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("[%s] template=%s starting", req.job_id, req.template)
+    mark_stage(req.job_id, RenderStage.SCRIPTING, progress=0.05)
     mark_stage(req.job_id, RenderStage.RENDERING, progress=0.10)
 
     try:
@@ -81,14 +83,28 @@ def run_one_job(req: RenderJobRequest) -> None:
         )
         return
 
-    # PR 7 will upload final_mp4 to R2 here and set final_mp4_url to the
-    # public URL. PR 6 leaves final_mp4_url empty — the file lives at
-    # work_dir / "*.mp4" until then.
-    log.info("[%s] complete: %s", req.job_id, final_mp4)
+    # PR 7: upload to R2/MinIO between RENDERING and COMPLETE.
+    mark_stage(req.job_id, RenderStage.UPLOADING, progress=0.92)
+    try:
+        public_url = upload_render_mp4(
+            final_mp4, user_id=req.user_id, job_id=req.job_id,
+        )
+    except Exception as e:
+        log.exception("[%s] upload failed", req.job_id)
+        update_render_status(
+            req.job_id,
+            stage=RenderStage.FAILED.value,
+            error=f"upload failed: {type(e).__name__}: {e}",
+            set_completed_now=True,
+        )
+        return
+
+    log.info("[%s] complete: %s", req.job_id, public_url)
     update_render_status(
         req.job_id,
         stage=RenderStage.COMPLETE.value,
         progress=1.0,
+        final_mp4_url=public_url,
         set_completed_now=True,
     )
 

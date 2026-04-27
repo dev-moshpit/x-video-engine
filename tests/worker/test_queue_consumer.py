@@ -167,9 +167,14 @@ def test_run_one_job_dispatches_and_marks_complete(fake_redis, shared_engine, tm
     fake_mp4.write_bytes(b"x" * 32_000)
 
     from apps.worker import main as worker_main
-    # Override the work-root so the adapter writes under tmp_path
+    # Mock both the heavy adapter and the R2 upload — those are
+    # exercised in their own test files (dispatcher / storage).
     with patch.object(worker_main, "WORK_ROOT", tmp_path), \
-         patch.object(worker_main, "render_for_template", return_value=fake_mp4):
+         patch.object(worker_main, "render_for_template", return_value=fake_mp4), \
+         patch.object(
+             worker_main, "upload_render_mp4",
+             return_value="http://example.invalid/foo/job_dispatch_ok.mp4",
+         ):
         req = RenderJobRequest(
             job_id=job_id, user_id="u", project_id=project_id,
             template="ai_story",
@@ -181,11 +186,13 @@ def test_run_one_job_dispatches_and_marks_complete(fake_redis, shared_engine, tm
 
     with shared_engine.connect() as conn:
         row = conn.execute(
-            text("SELECT stage, progress, completed_at FROM renders WHERE job_id=:j"),
+            text("SELECT stage, progress, final_mp4_url, completed_at "
+                  "FROM renders WHERE job_id=:j"),
             {"j": job_id},
         ).one()
     assert row.stage == "complete"
     assert row.progress == 1.0
+    assert row.final_mp4_url == "http://example.invalid/foo/job_dispatch_ok.mp4"
     assert row.completed_at is not None
 
 
