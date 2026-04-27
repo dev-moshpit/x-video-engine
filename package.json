@@ -13,7 +13,9 @@
     "dev:db:upgrade": "py -3.11 -m alembic -c apps/api/alembic.ini upgrade head",
     "dev:db:downgrade": "py -3.11 -m alembic -c apps/api/alembic.ini downgrade -1",
     "dev:db:revision": "py -3.11 -m alembic -c apps/api/alembic.ini revision --autogenerate -m",
-    "test:api": "py -3.11 -m pytest tests/api"
+    "test:api": "py -3.11 -m pytest tests/api",
+    "test:worker": "py -3.11 -m pytest tests/worker",
+    "test": "py -3.11 -m pytest tests/api tests/worker"
   },
   "engines": {
     "node": ">=20",
