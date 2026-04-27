@@ -23,6 +23,9 @@ redis>=5.0
 # Object storage — presign URLs (PR 7)
 boto3>=1.34
 
+# Clerk JWT verification (PR 2): RS256 + JWKS
+pyjwt[crypto]>=2.8
+
 # Tests
 pytest>=8.0
 httpx>=0.27
