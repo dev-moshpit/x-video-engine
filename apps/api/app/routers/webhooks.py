@@ -25,7 +25,7 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from svix.webhooks import Webhook, WebhookVerificationError
+from svix.webhooks import Webhook
 
 from app.db.session import DbSession
 from app.services.users import (
@@ -70,10 +70,14 @@ async def clerk_webhook(request: Request, db: DbSession) -> Response:
 
     try:
         event = Webhook(secret).verify(body, headers)
-    except WebhookVerificationError as e:
+    except Exception as e:
+        # Fail closed: WebhookVerificationError, malformed-base64
+        # signature (binascii.Error from standardwebhooks), missing
+        # headers, etc. all collapse into 401. Don't leak the specific
+        # failure mode — that turns the endpoint into a signature oracle.
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
-            detail=f"invalid webhook signature: {e}",
+            detail="webhook signature verification failed",
         ) from e
 
     event_type = event.get("type")

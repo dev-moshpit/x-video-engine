@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,14 +37,19 @@ def client():
 
 
 def _sign(secret: str, body: dict) -> tuple[bytes, dict[str, str]]:
-    """Produce a Svix-signed (body, headers) pair for the test client."""
+    """Produce a Svix-signed (body, headers) pair for the test client.
+
+    svix>=1.x ``Webhook.sign`` takes a ``datetime`` for the timestamp;
+    the wire header is the integer Unix timestamp.
+    """
     raw = json.dumps(body).encode("utf-8")
     msg_id = "msg_test_" + str(int(time.time() * 1000))
-    timestamp = str(int(time.time()))
-    sig = Webhook(secret).sign(msg_id, int(timestamp), raw.decode("utf-8"))
+    now = datetime.now(timezone.utc)
+    timestamp_header = str(int(now.timestamp()))
+    sig = Webhook(secret).sign(msg_id, now, raw.decode("utf-8"))
     headers = {
         "svix-id": msg_id,
-        "svix-timestamp": timestamp,
+        "svix-timestamp": timestamp_header,
         "svix-signature": sig,
         "content-type": "application/json",
     }

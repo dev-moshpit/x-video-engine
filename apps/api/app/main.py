@@ -1,10 +1,10 @@
 """SaaS API service — FastAPI.
 
-CPU-only. MUST NOT import the heavy renderer
-(``xvideo.prompt_native.plan_renderer_bridge`` or anything that
-lazy-loads SDXL / torch). The api may import the plan-only surface
-(``generate_video_plan``, ``score_plan``, ``audit_plan``) starting
-in PR 4.
+CPU-only. Imports the cheap plan-only surface of ``xvideo.prompt_native``
+(``generate_video_plan``, ``score_plan``, ``audit_plan``,
+``CAPTION_STYLES``) starting in PR 4. MUST NOT import the heavy renderer
+(``xvideo.prompt_native.plan_renderer_bridge.render_video_plan``) — that
+lives in apps/worker.
 
 Run from the project root:
 
@@ -18,19 +18,19 @@ or via the pnpm script:
 from __future__ import annotations
 
 import os
-import uuid
 from datetime import datetime
+import uuid
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.auth.clerk import CurrentUser
-from app.db.session import DbSession
-from app.routers import webhooks
-from app.services.users import upsert_user_from_clerk
+from app.auth.deps import CurrentDbUser
+from app.routers import projects, templates, webhooks
+
 
 app = FastAPI(title="x-video-engine SaaS API", version="0.1.0")
+
 
 # CORS — the Next.js web app on :3000 (or the configured WEB_BASE_URL)
 # calls this api with a Clerk JWT in the Authorization header. Browsers
@@ -50,7 +50,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 app.include_router(webhooks.router)
+app.include_router(templates.router)
+app.include_router(projects.router)
 
 
 class HealthResponse(BaseModel):
@@ -76,26 +79,23 @@ def root() -> dict[str, str]:
 
 class MeResponse(BaseModel):
     """Authenticated principal + mirrored DB user record."""
-    user_id: str                # Clerk user_id
-    db_user_id: uuid.UUID       # internal user.id (FK target everywhere)
+    user_id: str
+    db_user_id: uuid.UUID
     email: str | None
     tier: str
     created_at: datetime
 
 
 @app.get("/api/me", response_model=MeResponse)
-def me(user: CurrentUser, db: DbSession) -> MeResponse:
-    """Echo the authenticated user; lazy-upsert into our ``users`` table.
+def me(db_user: CurrentDbUser) -> MeResponse:
+    """Echo the authenticated user with both Clerk + internal IDs.
 
-    Returns 401 if the bearer token is missing, expired, or fails JWKS
-    verification. On success, ensures a ``users`` row exists for this
-    Clerk user_id (so subsequent endpoints can FK off ``user_id``).
+    The ``CurrentDbUser`` dep handles bearer verification + lazy
+    upsert + mirroring the Clerk user_id into the local ``users``
+    table, so by the time we return the row exists.
     """
-    db_user = upsert_user_from_clerk(
-        db, clerk_user_id=user.user_id, email=user.email,
-    )
     return MeResponse(
-        user_id=user.user_id,
+        user_id=db_user.clerk_user_id,
         db_user_id=db_user.id,
         email=db_user.email,
         tier=db_user.tier,
