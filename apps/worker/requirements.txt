@@ -19,3 +19,4 @@ pydantic>=2.0
 
 # Tests
 pytest>=8.0
+fakeredis>=2.20
