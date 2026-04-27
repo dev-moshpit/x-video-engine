@@ -18,12 +18,17 @@ or via the pnpm script:
 from __future__ import annotations
 
 import os
+import uuid
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.auth.clerk import ClerkPrincipal, CurrentUser
+from app.auth.clerk import CurrentUser
+from app.db.session import DbSession
+from app.routers import webhooks
+from app.services.users import upsert_user_from_clerk
 
 app = FastAPI(title="x-video-engine SaaS API", version="0.1.0")
 
@@ -45,6 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(webhooks.router)
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -54,7 +61,7 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """Public liveness check — no auth."""
+    """Public liveness check — no auth, no DB."""
     return HealthResponse(status="ok", service="api", version=app.version)
 
 
@@ -67,12 +74,30 @@ def root() -> dict[str, str]:
     }
 
 
-@app.get("/api/me", response_model=ClerkPrincipal)
-def me(user: CurrentUser) -> ClerkPrincipal:
-    """Echo the authenticated Clerk principal back to the caller.
+class MeResponse(BaseModel):
+    """Authenticated principal + mirrored DB user record."""
+    user_id: str                # Clerk user_id
+    db_user_id: uuid.UUID       # internal user.id (FK target everywhere)
+    email: str | None
+    tier: str
+    created_at: datetime
+
+
+@app.get("/api/me", response_model=MeResponse)
+def me(user: CurrentUser, db: DbSession) -> MeResponse:
+    """Echo the authenticated user; lazy-upsert into our ``users`` table.
 
     Returns 401 if the bearer token is missing, expired, or fails JWKS
-    verification. The web app uses this to confirm api authentication
-    end-to-end and to reconcile the user record in PR 3.
+    verification. On success, ensures a ``users`` row exists for this
+    Clerk user_id (so subsequent endpoints can FK off ``user_id``).
     """
-    return user
+    db_user = upsert_user_from_clerk(
+        db, clerk_user_id=user.user_id, email=user.email,
+    )
+    return MeResponse(
+        user_id=user.user_id,
+        db_user_id=db_user.id,
+        email=db_user.email,
+        tier=db_user.tier,
+        created_at=db_user.created_at,
+    )
