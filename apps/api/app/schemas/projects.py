@@ -47,6 +47,7 @@ class RenderSummary(BaseModel):
     error: Optional[str] = None
     started_at: datetime
     completed_at: Optional[datetime] = None
+    starred: Optional[bool] = None
 
 
 class ProjectDetailResponse(ProjectResponse):

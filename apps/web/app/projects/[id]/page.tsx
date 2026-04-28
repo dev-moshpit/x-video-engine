@@ -16,10 +16,13 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
+  clearRenderFeedback,
   createRender,
   getProject,
   getRender,
   previewPlan,
+  rejectRender,
+  starRender,
   type GeneratedPlan,
   type ProjectDetail,
   type RenderSummary,
@@ -269,53 +272,107 @@ function PlanCard({ plan }: { plan: GeneratedPlan }) {
 }
 
 function RenderStatusCard({ render }: { render: RenderSummary }) {
-  const isComplete = render.stage === "complete";
-  const isFailed = render.stage === "failed";
+  const { getToken } = useAuth();
+  const [current, setCurrent] = useState(render);
+  // Sync external updates (the parent's poll) into local state.
+  useEffect(() => {
+    setCurrent(render);
+  }, [render]);
+
+  const isComplete = current.stage === "complete";
+  const isFailed = current.stage === "failed";
+
+  async function applyFeedback(
+    next: "star" | "reject" | "clear",
+  ) {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      let updated: RenderSummary;
+      if (next === "star") updated = await starRender(current.id, token);
+      else if (next === "reject") updated = await rejectRender(current.id, token);
+      else updated = await clearRenderFeedback(current.id, token);
+      setCurrent(updated);
+    } catch {
+      // swallow — UI keeps the previous state
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Render</CardTitle>
           <Badge tone={isComplete ? "ok" : isFailed ? "error" : "warn"}>
-            {render.stage}
+            {current.stage}
           </Badge>
         </div>
         <CardDescription>
-          job <span className="font-mono">{render.job_id}</span>
+          job <span className="font-mono">{current.job_id}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
           <div
             className="h-full bg-emerald-500 transition-all"
-            style={{ width: `${Math.round(render.progress * 100)}%` }}
+            style={{ width: `${Math.round(current.progress * 100)}%` }}
           />
         </div>
         <div className="text-xs text-zinc-500">
-          {Math.round(render.progress * 100)}%
-          {render.completed_at
-            ? ` · finished ${new Date(render.completed_at).toLocaleTimeString()}`
-            : ` · started ${new Date(render.started_at).toLocaleTimeString()}`}
+          {Math.round(current.progress * 100)}%
+          {current.completed_at
+            ? ` · finished ${new Date(current.completed_at).toLocaleTimeString()}`
+            : ` · started ${new Date(current.started_at).toLocaleTimeString()}`}
         </div>
-        {isFailed && render.error ? (
+        {isFailed && current.error ? (
           <p className="rounded-md border border-red-900 bg-red-950/40 p-2 text-xs text-red-200">
-            {render.error}
+            {current.error}
           </p>
         ) : null}
-        {isComplete && render.final_mp4_url ? (
-          <div className="space-y-2">
+        {isComplete && current.final_mp4_url ? (
+          <div className="space-y-3">
             <video
-              src={render.final_mp4_url}
+              src={current.final_mp4_url}
               controls
               className="w-full rounded-md border border-zinc-800"
             />
-            <a
-              href={render.final_mp4_url}
-              download
-              className="inline-block text-sm text-zinc-300 hover:text-zinc-100 underline-offset-4 hover:underline"
-            >
-              Download MP4 ↓
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={current.final_mp4_url}
+                download
+                className="text-sm text-zinc-300 hover:text-zinc-100 underline-offset-4 hover:underline"
+              >
+                Download MP4 ↓
+              </a>
+              <span className="ml-auto flex gap-2">
+                <Button
+                  size="sm"
+                  variant={current.starred === true ? "default" : "outline"}
+                  onClick={() => applyFeedback("star")}
+                  title="Mark this render as a winner"
+                >
+                  ★ Star
+                </Button>
+                <Button
+                  size="sm"
+                  variant={current.starred === false ? "destructive" : "outline"}
+                  onClick={() => applyFeedback("reject")}
+                  title="Mark this render as a reject"
+                >
+                  ✕ Reject
+                </Button>
+                {current.starred !== null ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => applyFeedback("clear")}
+                    title="Clear feedback"
+                  >
+                    ↺ Clear
+                  </Button>
+                ) : null}
+              </span>
+            </div>
           </div>
         ) : null}
       </CardContent>

@@ -57,6 +57,7 @@ export interface RenderSummary {
   error: string | null;
   started_at: string;
   completed_at: string | null;
+  starred: boolean | null;
 }
 
 export interface ProjectDetail extends Project {
@@ -189,3 +190,21 @@ export const createRender = (projectId: string, token: string) =>
 
 export const getRender = (renderId: string, token: string) =>
   apiFetch<RenderSummary>(`/api/renders/${renderId}`, { token });
+
+export const starRender = (renderId: string, token: string) =>
+  apiFetch<RenderSummary>(`/api/renders/${renderId}/star`, {
+    method: "POST",
+    token,
+  });
+
+export const rejectRender = (renderId: string, token: string) =>
+  apiFetch<RenderSummary>(`/api/renders/${renderId}/reject`, {
+    method: "POST",
+    token,
+  });
+
+export const clearRenderFeedback = (renderId: string, token: string) =>
+  apiFetch<RenderSummary>(`/api/renders/${renderId}/feedback`, {
+    method: "DELETE",
+    token,
+  });

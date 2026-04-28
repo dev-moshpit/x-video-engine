@@ -127,6 +127,9 @@ class Render(Base):
         String(500), nullable=True,
     )
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # PR 12: operator feedback. None = no decision, True = starred,
+    # False = rejected. Read by selection_learning (PR 13).
+    starred: Mapped[Optional[bool]] = mapped_column(nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow,
     )

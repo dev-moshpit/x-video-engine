@@ -74,10 +74,52 @@ def get_render(
     user: CurrentDbUser,
     db: DbSession,
 ) -> RenderSummary:
+    render = _get_owned_render(db, user, render_id)
+    return RenderSummary.model_validate(render)
+
+
+def _get_owned_render(db, user, render_id: uuid.UUID) -> Render:
     render = db.get(Render, render_id)
     if render is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "render not found")
     project = db.get(Project, render.project_id)
     if project is None or project.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "render not found")
-    return RenderSummary.model_validate(render)
+    return render
+
+
+def _set_starred(
+    db,
+    user,
+    render_id: uuid.UUID,
+    value: bool | None,
+) -> Render:
+    render = _get_owned_render(db, user, render_id)
+    render.starred = value
+    db.commit()
+    db.refresh(render)
+    return render
+
+
+@router.post("/renders/{render_id}/star", response_model=RenderSummary)
+def star_render(
+    render_id: uuid.UUID, user: CurrentDbUser, db: DbSession,
+) -> RenderSummary:
+    """Mark a render as starred — feeds the selection_learning loop."""
+    return RenderSummary.model_validate(_set_starred(db, user, render_id, True))
+
+
+@router.post("/renders/{render_id}/reject", response_model=RenderSummary)
+def reject_render(
+    render_id: uuid.UUID, user: CurrentDbUser, db: DbSession,
+) -> RenderSummary:
+    """Mark a render as rejected (negative signal for the learning loop)."""
+    return RenderSummary.model_validate(_set_starred(db, user, render_id, False))
+
+
+@router.delete("/renders/{render_id}/feedback", response_model=RenderSummary)
+def clear_render_feedback(
+    render_id: uuid.UUID, user: CurrentDbUser, db: DbSession,
+) -> RenderSummary:
+    """Clear any prior star/reject decision (return to ``None``)."""
+    return RenderSummary.model_validate(_set_starred(db, user, render_id, None))
