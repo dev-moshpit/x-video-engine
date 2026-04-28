@@ -15,6 +15,8 @@
     "dev:db:revision": "py -3.11 -m alembic -c apps/api/alembic.ini revision --autogenerate -m",
     "test:api": "py -3.11 -m pytest tests/api",
     "test:worker": "py -3.11 -m pytest tests/worker",
+    "e2e": "pnpm --filter @xve/web e2e",
+    "test:worker": "py -3.11 -m pytest tests/worker",
     "test": "py -3.11 -m pytest tests/api tests/worker"
   },
   "engines": {

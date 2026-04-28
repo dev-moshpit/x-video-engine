@@ -3,3 +3,12 @@ node_modules/
 out/
 *.tsbuildinfo
 .env.local
+
+# clerk configuration (can include secrets)
+/.clerk/
+
+# playwright (PR 10)
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
