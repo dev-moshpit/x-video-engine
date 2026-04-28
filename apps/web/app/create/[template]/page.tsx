@@ -22,6 +22,12 @@ const KNOWN_TEMPLATES = [
   "reddit_story",
   "voiceover",
   "auto_captions",
+  "fake_text",
+  "would_you_rather",
+  "split_video",
+  "twitter",
+  "top_five",
+  "roblox_rant",
 ] as const;
 
 type TemplateId = (typeof KNOWN_TEMPLATES)[number];
@@ -45,7 +51,37 @@ const TITLES: Record<TemplateId, { name: string; tagline: string }> = {
   auto_captions: {
     name: "Auto-Captions Video",
     tagline:
-      "Script → AI voice → big bold burned captions over a flat background. Audio upload + transcription lands in Phase 2.",
+      "Script → AI voice → big bold burned captions. Drop in audio/video and we transcribe with Whisper.",
+  },
+  fake_text: {
+    name: "Fake Text Conversation",
+    tagline:
+      "iOS / WhatsApp / Instagram / Tinder chat-screen video with typing animation and optional voice narration.",
+  },
+  would_you_rather: {
+    name: "Would You Rather",
+    tagline:
+      "Two-option poll with timer countdown and percentage reveal — engagement-bait gold.",
+  },
+  split_video: {
+    name: "Split Video",
+    tagline:
+      "Top/bottom or left/right split — your main clip with filler gameplay, voiceover, and burned captions.",
+  },
+  twitter: {
+    name: "Twitter / X Tweet Video",
+    tagline:
+      "Render a tweet card (single or thread) with realistic metrics, voiceover, and captions.",
+  },
+  top_five: {
+    name: "Top 5 / Countdown",
+    tagline:
+      "Numbered countdown video — 3 to 10 ranked items with bold overlays, voice, captions.",
+  },
+  roblox_rant: {
+    name: "Roblox Rant",
+    tagline:
+      "Fast-paced rant with bold impact captions over a gameplay background. Energy at 11.",
   },
 };
 
@@ -95,8 +131,20 @@ export default function CreateProjectPage({
         <RedditStoryForm router={router} getToken={getToken} />
       ) : template === "voiceover" ? (
         <VoiceoverForm router={router} getToken={getToken} />
-      ) : (
+      ) : template === "auto_captions" ? (
         <AutoCaptionsForm router={router} getToken={getToken} />
+      ) : template === "fake_text" ? (
+        <FakeTextForm router={router} getToken={getToken} />
+      ) : template === "would_you_rather" ? (
+        <WouldYouRatherForm router={router} getToken={getToken} />
+      ) : template === "split_video" ? (
+        <SplitVideoForm router={router} getToken={getToken} />
+      ) : template === "twitter" ? (
+        <TwitterForm router={router} getToken={getToken} />
+      ) : template === "top_five" ? (
+        <TopFiveForm router={router} getToken={getToken} />
+      ) : (
+        <RobloxRantForm router={router} getToken={getToken} />
       )}
     </AppShell>
   );
@@ -525,6 +573,8 @@ function VoiceoverForm({ router, getToken }: { router: RouterT; getToken: GetTok
 function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
   const [name, setName] = useState("");
   const [script, setScript] = useState("");
+  const [audioUrl, setAudioUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [language, setLanguage] = useState("en");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [bgColor, setBgColor] = useState("#0b0b0f");
@@ -549,6 +599,8 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
               aspect,
               background_color: bgColor,
               caption_style: captionStyle,
+              ...(audioUrl ? { audio_url: audioUrl } : {}),
+              ...(videoUrl ? { video_url: videoUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
             },
           },
@@ -580,9 +632,29 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
           onChange={(e) => setScript(e.target.value)}
         />
         <p className="text-xs text-zinc-500">
-          Phase 1 is script-only. Audio/video upload + transcription is
-          scheduled for Phase 2.
+          Or paste an audio/video URL below to transcribe with Whisper —
+          the script is then ignored.
         </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="audio_url">Audio URL (optional)</Label>
+          <Input
+            id="audio_url"
+            placeholder="https://… .mp3 / .wav"
+            value={audioUrl}
+            onChange={(e) => setAudioUrl(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="video_url">Video URL (optional)</Label>
+          <Input
+            id="video_url"
+            placeholder="https://… .mp4"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+          />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="grid gap-2">
@@ -625,6 +697,878 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
       <ErrorBox error={error} />
 
       <div className="flex items-center gap-3">
+        <Button type="submit" disabled={submitting || script.length < 10}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+// ─── Fake Text ──────────────────────────────────────────────────────────
+
+type FakeTextMessageRow = {
+  sender: "me" | "them";
+  text: string;
+  typing_ms: number;
+  hold_ms: number;
+};
+
+function FakeTextForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [style, setStyle] = useState<"ios" | "whatsapp" | "instagram" | "tinder">("ios");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [chatTitle, setChatTitle] = useState("Mom");
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [narrate, setNarrate] = useState(true);
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [messages, setMessages] = useState<FakeTextMessageRow[]>([
+    { sender: "them", text: "Are you home?", typing_ms: 800, hold_ms: 1500 },
+    { sender: "me", text: "Yeah, why?", typing_ms: 800, hold_ms: 1500 },
+    { sender: "them", text: "We need to talk.", typing_ms: 1200, hold_ms: 2000 },
+  ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateMsg = (i: number, patch: Partial<FakeTextMessageRow>) =>
+    setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  const addMsg = () =>
+    setMessages((p) => [...p, { sender: "them", text: "", typing_ms: 800, hold_ms: 1500 }]);
+  const removeMsg = (i: number) =>
+    setMessages((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p));
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const cleaned = messages.filter((m) => m.text.trim().length > 0);
+        if (cleaned.length === 0) {
+          setError("Add at least one message with text.");
+          return;
+        }
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "fake_text",
+            name: name || `${chatTitle} chat`,
+            template_input: {
+              style,
+              theme,
+              chat_title: chatTitle,
+              aspect,
+              narrate,
+              caption_style: captionStyle,
+              ...(voiceName ? { voice_name: voiceName } : {}),
+              messages: cleaned,
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input
+          placeholder="auto: chat title"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid gap-2">
+          <Label>Style</Label>
+          <select
+            value={style}
+            onChange={(e) => setStyle(e.target.value as typeof style)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm text-zinc-100"
+          >
+            <option value="ios">iOS</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="instagram">Instagram</option>
+            <option value="tinder">Tinder</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Theme</Label>
+          <select
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as typeof theme)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm text-zinc-100"
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Chat title</Label>
+          <Input value={chatTitle} onChange={(e) => setChatTitle(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <Label>Messages</Label>
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className="grid grid-cols-12 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/50 p-2"
+          >
+            <select
+              value={m.sender}
+              onChange={(e) =>
+                updateMsg(i, { sender: e.target.value as "me" | "them" })
+              }
+              className="col-span-2 h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm"
+            >
+              <option value="them">them</option>
+              <option value="me">me</option>
+            </select>
+            <Input
+              className="col-span-6"
+              placeholder="message text"
+              value={m.text}
+              onChange={(e) => updateMsg(i, { text: e.target.value })}
+            />
+            <Input
+              className="col-span-1"
+              type="number"
+              min={0}
+              max={10000}
+              value={m.typing_ms}
+              onChange={(e) => updateMsg(i, { typing_ms: Number(e.target.value) })}
+              title="typing ms"
+            />
+            <Input
+              className="col-span-2"
+              type="number"
+              min={100}
+              max={15000}
+              value={m.hold_ms}
+              onChange={(e) => updateMsg(i, { hold_ms: Number(e.target.value) })}
+              title="hold ms"
+            />
+            <button
+              type="button"
+              className="col-span-1 text-xs text-red-300 hover:text-red-200"
+              onClick={() => removeMsg(i)}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addMsg}
+          className="self-start rounded-md border border-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-900"
+        >
+          + add message
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <label className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={narrate}
+            onChange={(e) => setNarrate(e.target.checked)}
+          />
+          Narrate (TTS reads conversation aloud)
+        </label>
+        <div className="grid gap-2">
+          <Label>Voice (optional)</Label>
+          <Input
+            placeholder="en-US-AriaNeural"
+            value={voiceName}
+            onChange={(e) => setVoiceName(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+
+      <ErrorBox error={error} />
+
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={submitting}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Would You Rather ───────────────────────────────────────────────────
+
+function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [question, setQuestion] = useState("Would you rather…");
+  const [optionA, setOptionA] = useState("");
+  const [optionB, setOptionB] = useState("");
+  const [colorA, setColorA] = useState("#1f6feb");
+  const [colorB, setColorB] = useState("#dc2626");
+  const [timer, setTimer] = useState(5);
+  const [pctA, setPctA] = useState(50);
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "would_you_rather",
+            name: name || question.slice(0, 60),
+            template_input: {
+              question,
+              option_a: optionA,
+              option_b: optionB,
+              color_a: colorA,
+              color_b: colorB,
+              timer_seconds: timer,
+              reveal_percent_a: pctA,
+              aspect,
+              caption_style: captionStyle,
+              ...(voiceName ? { voice_name: voiceName } : {}),
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="grid gap-2">
+        <Label>Question *</Label>
+        <Textarea
+          required
+          minLength={10}
+          maxLength={300}
+          rows={2}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label>Option A *</Label>
+          <Input required value={optionA} onChange={(e) => setOptionA(e.target.value)} />
+          <Input
+            type="text"
+            pattern="^#[0-9a-fA-F]{6}$"
+            value={colorA}
+            onChange={(e) => setColorA(e.target.value)}
+            className="text-xs"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Option B *</Label>
+          <Input required value={optionB} onChange={(e) => setOptionB(e.target.value)} />
+          <Input
+            type="text"
+            pattern="^#[0-9a-fA-F]{6}$"
+            value={colorB}
+            onChange={(e) => setColorB(e.target.value)}
+            className="text-xs"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid gap-2">
+          <Label>Timer (s)</Label>
+          <Input
+            type="number"
+            min={3}
+            max={15}
+            value={timer}
+            onChange={(e) => setTimer(Number(e.target.value))}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>% chose A</Label>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={pctA}
+            onChange={(e) => setPctA(Number(e.target.value))}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Voice (optional)</Label>
+        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+      </div>
+
+      <ErrorBox error={error} />
+      <div>
+        <Button type="submit" disabled={submitting || optionA.length < 1 || optionB.length < 1 || question.length < 10}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Split Video ────────────────────────────────────────────────────────
+
+function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+  const [mainUrl, setMainUrl] = useState("");
+  const [fillerUrl, setFillerUrl] = useState("");
+  const [script, setScript] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [bgColor, setBgColor] = useState("#0b0b0f");
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "split_video",
+            name: name || script.slice(0, 60),
+            template_input: {
+              layout,
+              script,
+              duration,
+              aspect,
+              background_color: bgColor,
+              caption_style: captionStyle,
+              ...(mainUrl ? { main_url: mainUrl } : {}),
+              ...(fillerUrl ? { filler_url: fillerUrl } : {}),
+              ...(voiceName ? { voice_name: voiceName } : {}),
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label>Layout</Label>
+          <select
+            value={layout}
+            onChange={(e) => setLayout(e.target.value as typeof layout)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm"
+          >
+            <option value="vertical">Top / Bottom</option>
+            <option value="horizontal">Left / Right</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Duration (s)</Label>
+          <Input
+            type="number"
+            min={8}
+            max={120}
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+          />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Main clip URL</Label>
+        <Input
+          placeholder="https://… or local path under work_dir"
+          value={mainUrl}
+          onChange={(e) => setMainUrl(e.target.value)}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label>Filler clip URL (optional, gameplay/satisfying)</Label>
+        <Input value={fillerUrl} onChange={(e) => setFillerUrl(e.target.value)} />
+      </div>
+      <div className="grid gap-2">
+        <Label>Script *</Label>
+        <Textarea
+          required
+          minLength={10}
+          maxLength={8000}
+          rows={5}
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label>Bg color (fallback)</Label>
+          <Input
+            type="text"
+            pattern="^#[0-9a-fA-F]{6}$"
+            value={bgColor}
+            onChange={(e) => setBgColor(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Voice (optional)</Label>
+          <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+
+      <ErrorBox error={error} />
+      <div>
+        <Button type="submit" disabled={submitting || script.length < 10}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Twitter / X ────────────────────────────────────────────────────────
+
+function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [handle, setHandle] = useState("elonmusk");
+  const [displayName, setDisplayName] = useState("Elon Musk");
+  const [text, setText] = useState("");
+  const [thread, setThread] = useState<string[]>([]);
+  const [likes, setLikes] = useState(1200);
+  const [retweets, setRetweets] = useState(80);
+  const [replies, setReplies] = useState(150);
+  const [views, setViews] = useState(45000);
+  const [verified, setVerified] = useState(true);
+  const [darkMode, setDarkMode] = useState(true);
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [bgColor, setBgColor] = useState("#0b0b0f");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateThread = (i: number, v: string) =>
+    setThread((p) => p.map((t, idx) => (idx === i ? v : t)));
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "twitter",
+            name: name || text.slice(0, 60),
+            template_input: {
+              handle,
+              display_name: displayName,
+              text,
+              thread: thread.filter((t) => t.trim().length > 0),
+              likes,
+              retweets,
+              replies,
+              views,
+              verified,
+              dark_mode: darkMode,
+              aspect,
+              background_color: bgColor,
+              caption_style: captionStyle,
+              ...(voiceName ? { voice_name: voiceName } : {}),
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label>Display name *</Label>
+          <Input required value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Handle (without @) *</Label>
+          <Input required value={handle} onChange={(e) => setHandle(e.target.value)} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Tweet text *</Label>
+        <Textarea
+          required
+          minLength={1}
+          maxLength={1000}
+          rows={4}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label>Thread (optional follow-up tweets)</Label>
+        {thread.map((t, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              value={t}
+              onChange={(e) => updateThread(i, e.target.value)}
+              placeholder={`Tweet ${i + 2}`}
+            />
+            <button
+              type="button"
+              className="text-xs text-red-300"
+              onClick={() => setThread((p) => p.filter((_, idx) => idx !== i))}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {thread.length < 10 ? (
+          <button
+            type="button"
+            className="self-start rounded-md border border-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-900"
+            onClick={() => setThread((p) => [...p, ""])}
+          >
+            + add reply
+          </button>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid gap-2">
+          <Label>Likes</Label>
+          <Input type="number" min={0} value={likes} onChange={(e) => setLikes(Number(e.target.value))} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Retweets</Label>
+          <Input type="number" min={0} value={retweets} onChange={(e) => setRetweets(Number(e.target.value))} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Replies</Label>
+          <Input type="number" min={0} value={replies} onChange={(e) => setReplies(Number(e.target.value))} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Views</Label>
+          <Input type="number" min={0} value={views} onChange={(e) => setViews(Number(e.target.value))} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <label className="mt-6 inline-flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
+          Verified
+        </label>
+        <label className="mt-6 inline-flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={darkMode} onChange={(e) => setDarkMode(e.target.checked)} />
+          Dark mode
+        </label>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label>Page bg color</Label>
+          <Input pattern="^#[0-9a-fA-F]{6}$" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Voice (optional)</Label>
+          <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+        </div>
+      </div>
+
+      <ErrorBox error={error} />
+      <div>
+        <Button type="submit" disabled={submitting || text.length < 1}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Top 5 / Countdown ──────────────────────────────────────────────────
+
+type TopFiveItemRow = { title: string; description: string };
+
+function TopFiveForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("Top 5 Cities to Visit Before You Die");
+  const [items, setItems] = useState<TopFiveItemRow[]>([
+    { title: "Tokyo", description: "Neon, sushi, vending machines on every corner." },
+    { title: "Reykjavik", description: "Volcanoes and aurora borealis." },
+    { title: "Cape Town", description: "Where the mountains meet the sea." },
+    { title: "Cusco", description: "Gateway to Machu Picchu." },
+    { title: "Marrakech", description: "Souks, spices, and rooftop sunsets." },
+  ]);
+  const [perItem, setPerItem] = useState(4);
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [bgColor, setBgColor] = useState("#0b0b0f");
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateItem = (i: number, patch: Partial<TopFiveItemRow>) =>
+    setItems((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  const addItem = () =>
+    setItems((p) => (p.length < 10 ? [...p, { title: "", description: "" }] : p));
+  const removeItem = (i: number) =>
+    setItems((p) => (p.length > 3 ? p.filter((_, idx) => idx !== i) : p));
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const cleaned = items
+          .map((it) => ({ title: it.title.trim(), description: it.description.trim() }))
+          .filter((it) => it.title.length > 0);
+        if (cleaned.length < 3) {
+          setError("Need at least 3 items with titles.");
+          return;
+        }
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "top_five",
+            name: name || title.slice(0, 60),
+            template_input: {
+              title,
+              items: cleaned.map((it) =>
+                it.description ? it : { title: it.title }
+              ),
+              per_item_seconds: perItem,
+              aspect,
+              background_color: bgColor,
+              caption_style: captionStyle,
+              ...(voiceName ? { voice_name: voiceName } : {}),
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="grid gap-2">
+        <Label>List title *</Label>
+        <Input required value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <div className="grid gap-3">
+        <Label>Items (3-10, count down N→1)</Label>
+        {items.map((it, i) => (
+          <div key={i} className="grid grid-cols-12 items-start gap-2 rounded-md border border-zinc-800 bg-zinc-950/50 p-2">
+            <Input
+              className="col-span-4"
+              placeholder={`Item ${i + 1} title`}
+              value={it.title}
+              onChange={(e) => updateItem(i, { title: e.target.value })}
+            />
+            <Input
+              className="col-span-7"
+              placeholder="description (optional)"
+              value={it.description}
+              onChange={(e) => updateItem(i, { description: e.target.value })}
+            />
+            <button
+              type="button"
+              className="col-span-1 text-xs text-red-300"
+              onClick={() => removeItem(i)}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {items.length < 10 ? (
+          <button
+            type="button"
+            onClick={addItem}
+            className="self-start rounded-md border border-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-900"
+          >
+            + add item
+          </button>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid gap-2">
+          <Label>Sec / item</Label>
+          <Input
+            type="number"
+            min={2}
+            max={15}
+            value={perItem}
+            onChange={(e) => setPerItem(Number(e.target.value))}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Bg color</Label>
+          <Input pattern="^#[0-9a-fA-F]{6}$" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Voice (optional)</Label>
+        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+      </div>
+
+      <ErrorBox error={error} />
+      <div>
+        <Button type="submit" disabled={submitting || title.length < 1}>
+          {submitting ? "Creating…" : "Create project"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Roblox Rant ────────────────────────────────────────────────────────
+
+function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
+  const [name, setName] = useState("");
+  const [script, setScript] = useState("");
+  const [bgUrl, setBgUrl] = useState("");
+  const [bgColor, setBgColor] = useState("#0b0b0f");
+  const [rate, setRate] = useState("+15%");
+  const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
+  const [voiceName, setVoiceName] = useState("");
+  const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submitProject(
+          router,
+          getToken,
+          {
+            template: "roblox_rant",
+            name: name || script.slice(0, 60),
+            template_input: {
+              script,
+              speech_rate: rate,
+              background_color: bgColor,
+              aspect,
+              caption_style: captionStyle,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
+              ...(voiceName ? { voice_name: voiceName } : {}),
+            },
+          },
+          setError,
+          setSubmitting,
+        );
+      }}
+      className="grid max-w-2xl gap-5"
+    >
+      <div className="grid gap-2">
+        <Label>Project name (optional)</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="grid gap-2">
+        <Label>Script *</Label>
+        <Textarea
+          required
+          minLength={10}
+          maxLength={8000}
+          rows={6}
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label>Background URL (Roblox / gameplay clip, optional)</Label>
+        <Input
+          placeholder="https://… or local path"
+          value={bgUrl}
+          onChange={(e) => setBgUrl(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid gap-2">
+          <Label>Speech rate</Label>
+          <Input
+            pattern="^[+\-]\d{1,3}%$"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            title="e.g. +15% (faster) or -5% (slower)"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Bg color</Label>
+          <Input pattern="^#[0-9a-fA-F]{6}$" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Aspect</Label>
+          <AspectSelect value={aspect} onChange={setAspect} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Voice (optional)</Label>
+        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+      </div>
+
+      <ErrorBox error={error} />
+      <div>
         <Button type="submit" disabled={submitting || script.length < 10}>
           {submitting ? "Creating…" : "Create project"}
         </Button>

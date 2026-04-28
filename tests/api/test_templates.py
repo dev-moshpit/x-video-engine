@@ -17,12 +17,19 @@ def client():
     return TestClient(app)
 
 
-def test_templates_returns_phase1_four(client: TestClient):
+_PHASE1 = {"ai_story", "auto_captions", "reddit_story", "voiceover"}
+_PHASE2 = {
+    "fake_text", "would_you_rather", "split_video",
+    "twitter", "top_five", "roblox_rant",
+}
+
+
+def test_templates_returns_phase1_and_phase2(client: TestClient):
     res = client.get("/api/templates")
     assert res.status_code == 200
     body = res.json()
-    ids = sorted(t["template_id"] for t in body)
-    assert ids == ["ai_story", "auto_captions", "reddit_story", "voiceover"]
+    ids = {t["template_id"] for t in body}
+    assert ids == _PHASE1 | _PHASE2
 
 
 def test_each_template_has_input_schema(client: TestClient):

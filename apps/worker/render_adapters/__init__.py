@@ -5,12 +5,13 @@ Storing the *module* (not the bound render function) gives us late
 binding — tests can patch ``apps.worker.render_adapters.ai_story.render``
 and the dispatcher picks up the patch on the next call.
 
-The worker's queue consumer (PR 6) will call ``render_for_template``
-which validates the raw template_input dict against the right Pydantic
+The worker's queue consumer calls ``render_for_template`` which
+validates the raw ``template_input`` dict against the right Pydantic
 model before invoking ``module.render(typed_input, work_dir)``.
 
-Adding a Phase 2 template (Fake Text, Would You Rather, etc.) is one
-new ``ADAPTERS`` entry plus a new module under this package.
+Phase 1 templates: ai_story, reddit_story, voiceover, auto_captions.
+Phase 2 templates: fake_text, would_you_rather, split_video, twitter,
+top_five, roblox_rant.
 """
 
 from __future__ import annotations
@@ -25,14 +26,26 @@ from pydantic import BaseModel
 from apps.worker.render_adapters import (
     ai_story,
     auto_captions,
+    fake_text,
     reddit_story,
+    roblox_rant,
+    split_video,
+    top_five,
+    twitter,
     voiceover,
+    would_you_rather,
 )
 from apps.worker.template_inputs import (
     AIStoryInput,
     AutoCaptionsInput,
+    FakeTextInput,
     RedditStoryInput,
+    RobloxRantInput,
+    SplitVideoInput,
+    TopFiveInput,
+    TwitterInput,
     VoiceoverInput,
+    WouldYouRatherInput,
 )
 
 
@@ -49,10 +62,16 @@ class AdapterEntry:
 
 
 ADAPTERS: dict[str, AdapterEntry] = {
-    "ai_story":      AdapterEntry(AIStoryInput,      ai_story),
-    "reddit_story":  AdapterEntry(RedditStoryInput,  reddit_story),
-    "voiceover":     AdapterEntry(VoiceoverInput,    voiceover),
-    "auto_captions": AdapterEntry(AutoCaptionsInput, auto_captions),
+    "ai_story":         AdapterEntry(AIStoryInput,         ai_story),
+    "reddit_story":     AdapterEntry(RedditStoryInput,     reddit_story),
+    "voiceover":        AdapterEntry(VoiceoverInput,       voiceover),
+    "auto_captions":    AdapterEntry(AutoCaptionsInput,    auto_captions),
+    "fake_text":        AdapterEntry(FakeTextInput,        fake_text),
+    "would_you_rather": AdapterEntry(WouldYouRatherInput,  would_you_rather),
+    "split_video":      AdapterEntry(SplitVideoInput,      split_video),
+    "twitter":          AdapterEntry(TwitterInput,         twitter),
+    "top_five":         AdapterEntry(TopFiveInput,         top_five),
+    "roblox_rant":      AdapterEntry(RobloxRantInput,      roblox_rant),
 }
 
 

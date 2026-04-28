@@ -17,6 +17,17 @@ boto3>=1.34
 # Shared schemas (Pydantic models on the wire)
 pydantic>=2.0
 
+# Phase 2 — UI-driven adapters (fake_text, twitter, would_you_rather,
+# top_five, roblox_rant) burn chat / tweet / poll panels to PNG via Pillow,
+# then concat into mp4. Pillow comes in transitively via torch/opencv on
+# the GPU worker, but we pin it here for the CPU-only deploy path.
+Pillow>=10.0
+
+# Phase 2 — Auto-Captions upgrade.
+# faster-whisper transcribes uploaded audio/video for the auto_captions
+# template. Wheel ships with bundled CTranslate2; runs on CPU by default.
+faster-whisper>=1.0
+
 # Tests
 pytest>=8.0
 fakeredis>=2.20

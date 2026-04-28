@@ -11,15 +11,26 @@ from apps.worker.render_adapters import ADAPTERS, render_for_template
 from apps.worker.template_inputs import (
     AIStoryInput,
     AutoCaptionsInput,
+    FakeTextInput,
     RedditStoryInput,
+    RobloxRantInput,
+    SplitVideoInput,
+    TopFiveInput,
+    TwitterInput,
     VoiceoverInput,
+    WouldYouRatherInput,
 )
 
 
-def test_adapters_registry_has_all_phase1_templates():
-    assert sorted(ADAPTERS) == [
-        "ai_story", "auto_captions", "reddit_story", "voiceover",
-    ]
+_PHASE1 = {"ai_story", "auto_captions", "reddit_story", "voiceover"}
+_PHASE2 = {
+    "fake_text", "would_you_rather", "split_video",
+    "twitter", "top_five", "roblox_rant",
+}
+
+
+def test_adapters_registry_has_all_phase1_and_phase2_templates():
+    assert set(ADAPTERS) == _PHASE1 | _PHASE2
 
 
 def test_each_entry_has_input_model_and_module():
@@ -32,7 +43,7 @@ def test_each_entry_has_input_model_and_module():
 
 def test_render_for_unknown_template_raises_valueerror(tmp_path: Path):
     with pytest.raises(ValueError, match="unknown template"):
-        render_for_template("fake_text", {}, tmp_path)
+        render_for_template("totally_made_up_template", {}, tmp_path)
 
 
 def test_invalid_input_raises_validation_error_before_render(tmp_path: Path):
@@ -58,8 +69,14 @@ def test_input_schema_parity_with_api():
     from app.schemas.templates import (  # noqa: E402
         AIStoryInput as APIAIStory,
         AutoCaptionsInput as APIAutoCaptions,
+        FakeTextInput as APIFakeText,
         RedditStoryInput as APIReddit,
+        RobloxRantInput as APIRobloxRant,
+        SplitVideoInput as APISplitVideo,
+        TopFiveInput as APITopFive,
+        TwitterInput as APITwitter,
         VoiceoverInput as APIVoiceover,
+        WouldYouRatherInput as APIWYR,
     )
 
     pairs = [
@@ -67,6 +84,12 @@ def test_input_schema_parity_with_api():
         (RedditStoryInput, APIReddit),
         (VoiceoverInput, APIVoiceover),
         (AutoCaptionsInput, APIAutoCaptions),
+        (FakeTextInput, APIFakeText),
+        (WouldYouRatherInput, APIWYR),
+        (SplitVideoInput, APISplitVideo),
+        (TwitterInput, APITwitter),
+        (TopFiveInput, APITopFive),
+        (RobloxRantInput, APIRobloxRant),
     ]
     for worker_model, api_model in pairs:
         assert (
