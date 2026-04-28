@@ -187,3 +187,109 @@ class Usage(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="usage")
+
+
+class Subscription(Base):
+    """Phase 3 — Stripe-backed paid plan.
+
+    A user has at most one ``status='active'`` subscription. Tier-derived
+    behavior (watermark, monthly credit grant, concurrency caps) is
+    computed off the active subscription so a webhook update lands
+    immediately. Free users have no row — :func:`effective_tier` returns
+    "free" when nothing matches.
+    """
+    __tablename__ = "subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True,
+    )
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, unique=True, index=True,
+    )
+    tier: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="free",
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active",
+    )
+    current_period_end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class CreditLedger(Base):
+    """Phase 3 — append-only credits journal.
+
+    Balance = SUM(amount) over a user. Positive = grant, negative =
+    consume. Reason is free-form so we can audit any odd entry by
+    grepping the column ("monthly_grant", "render_consume:<job>",
+    "topup", "stripe_invoice:<id>", "manual_adjust").
+    """
+    __tablename__ = "credits_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utcnow, index=True,
+    )
+
+
+class MediaAsset(Base):
+    """Phase 2.5 — saved media library entry.
+
+    Stored when the operator saves a Pexels/Pixabay search hit (or a
+    direct upload) to their library. Adapters that take a ``*_url``
+    field (split_video, roblox_rant, auto_captions video_url, etc.)
+    can then receive the asset's ``url`` directly.
+    """
+    __tablename__ = "media_assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_asset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    duration_sec: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    orientation: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True,
+    )
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    attribution: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )

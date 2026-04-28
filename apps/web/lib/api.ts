@@ -208,3 +208,79 @@ export const clearRenderFeedback = (renderId: string, token: string) =>
     method: "DELETE",
     token,
   });
+
+// ─── Media Library (Phase 2.5) ──────────────────────────────────────────
+
+export interface MediaSearchHit {
+  provider: string;
+  provider_asset_id: string;
+  kind: "video" | "image";
+  url: string;
+  thumbnail_url: string;
+  width: number;
+  height: number;
+  duration_sec: number | null;
+  orientation: string;
+  tags: string[];
+  attribution: string;
+}
+
+export interface MediaSearchResponse {
+  hits: MediaSearchHit[];
+  warnings: string[];
+}
+
+export interface MediaAsset {
+  id: string;
+  provider: string;
+  provider_asset_id: string;
+  kind: "video" | "image";
+  url: string;
+  thumbnail_url: string | null;
+  width: number | null;
+  height: number | null;
+  duration_sec: number | null;
+  orientation: string | null;
+  tags: string[];
+  attribution: string | null;
+}
+
+export const searchMedia = (
+  body: {
+    query: string;
+    kind?: "video" | "image";
+    orientation?: "any" | "vertical" | "horizontal" | "square";
+    providers?: ("pexels" | "pixabay")[];
+    page?: number;
+  },
+  token: string,
+) =>
+  apiFetch<MediaSearchResponse>("/api/media/search", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const saveMediaAsset = (
+  body: Omit<MediaAsset, "id"> & { thumbnail_url?: string | null },
+  token: string,
+) =>
+  apiFetch<MediaAsset>("/api/media/save", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const listMediaAssets = (
+  token: string,
+  filters: { kind?: "video" | "image"; orientation?: "vertical" | "horizontal" | "square" } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (filters.kind) qs.set("kind", filters.kind);
+  if (filters.orientation) qs.set("orientation", filters.orientation);
+  const path = qs.toString() ? `/api/media?${qs.toString()}` : "/api/media";
+  return apiFetch<MediaAsset[]>(path, { token });
+};
+
+export const deleteMediaAsset = (id: string, token: string) =>
+  apiFetch<void>(`/api/media/${id}`, { method: "DELETE", token });

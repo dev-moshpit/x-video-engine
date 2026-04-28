@@ -16,6 +16,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/templates" className="text-zinc-400 hover:text-zinc-100">
               Templates
             </Link>
+            <Link href="/library" className="text-zinc-400 hover:text-zinc-100">
+              Library
+            </Link>
             <UserButton />
           </nav>
         </div>

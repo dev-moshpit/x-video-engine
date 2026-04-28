@@ -19,6 +19,7 @@ from app.db.models import Project, Render
 from app.db.session import DbSession
 from app.schemas.projects import RenderSummary
 from app.schemas.render import RenderJobRequest, RenderStage
+from app.services import billing
 from app.services.queue import enqueue_render
 
 
@@ -43,6 +44,23 @@ def create_render(
     if project is None or project.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
 
+    # Phase 3: credit gate. Charge before enqueue so we don't accept a
+    # job we can't bill for; refund happens on render-failure (worker
+    # surfaces failed status, which a follow-up cron reconciles).
+    cost = billing.render_cost_credits(project.template)
+    try:
+        billing.consume_credits(
+            db, user.id, cost, reason=f"render_consume:{project.template}",
+        )
+    except billing.InsufficientCredits as exc:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"insufficient credits: {exc}. Upgrade your plan via "
+            f"/api/billing/checkout to continue rendering.",
+        )
+
+    tier = billing.effective_tier(db, user.id)
+
     job_id = _new_job_id()
     render = Render(
         project_id=project.id,
@@ -62,6 +80,7 @@ def create_render(
             project_id=str(project.id),
             template=project.template,
             template_input=project.template_input or {},
+            tier=tier,
         )
     )
 

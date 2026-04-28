@@ -43,6 +43,7 @@ from apps.worker.queue import (  # noqa: E402
     update_render_status,
 )
 from apps.worker.render_adapters import render_for_template  # noqa: E402
+from apps.worker.render_adapters._watermark import maybe_watermark  # noqa: E402
 from apps.worker.schemas import RenderJobRequest, RenderStage  # noqa: E402
 from apps.worker.storage import upload_render_mp4  # noqa: E402
 
@@ -86,6 +87,11 @@ def run_one_job(req: RenderJobRequest) -> None:
             set_completed_now=True,
         )
         return
+
+    # Phase 3: free-tier watermark step. No-op for paid tiers.
+    final_mp4 = maybe_watermark(
+        src=final_mp4, tier=req.tier, work_dir=work_dir,
+    )
 
     # PR 7: upload to R2/MinIO between RENDERING and COMPLETE.
     mark_stage(req.job_id, RenderStage.UPLOADING, progress=0.92)
