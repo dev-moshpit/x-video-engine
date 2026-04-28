@@ -28,6 +28,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               Billing
             </Link>
+            <Link
+              href="/settings/brand"
+              className="text-zinc-400 hover:text-zinc-100"
+            >
+              Brand
+            </Link>
             <UserButton />
           </nav>
         </div>

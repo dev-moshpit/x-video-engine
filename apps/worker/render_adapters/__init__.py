@@ -24,6 +24,7 @@ from typing import Type
 from pydantic import BaseModel
 
 from apps.worker.render_adapters import (
+    _context,
     ai_story,
     auto_captions,
     fake_text,
@@ -90,5 +91,15 @@ def render_for_template(
         raise ValueError(
             f"unknown template '{template}' — known: {sorted(ADAPTERS)}"
         )
+    # Phase 6: extract the brand kit before validation. The reserved
+    # ``_brand_kit`` key is injected by the worker main loop from the
+    # RenderJobRequest; Pydantic's ``extra="forbid"`` would reject it
+    # otherwise. Adapters read it via apps.worker.render_adapters._context.
+    raw_input = dict(raw_input or {})
+    brand_kit = raw_input.pop("_brand_kit", None)
     typed = entry.input_model.model_validate(raw_input)
-    return entry.module.render(typed, work_dir)
+    _context.set_brand_kit(brand_kit if isinstance(brand_kit, dict) else None)
+    try:
+        return entry.module.render(typed, work_dir)
+    finally:
+        _context.set_brand_kit(None)

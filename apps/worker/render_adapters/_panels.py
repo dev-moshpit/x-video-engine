@@ -16,6 +16,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from apps.worker.render_adapters._context import get_brand_color
 from apps.worker.render_adapters._font import load_font
 
 
@@ -207,7 +208,10 @@ def render_tweet_card(
     """Render a tweet card centered over a solid background."""
     width, height = size
     scale = width / 480.0
-    bg = _hex_to_rgb(background_color)
+    # Phase 6 brand kit:
+    #   - page bg uses accent_color when set, else the per-call value
+    #   - the verified-check accent + avatar circle use brand_color
+    bg = _hex_to_rgb(get_brand_color("accent_color", background_color))
     img = Image.new("RGB", size, color=bg)
     draw = ImageDraw.Draw(img)
 
@@ -220,7 +224,7 @@ def render_tweet_card(
         card_bg = (255, 255, 255)
         text_fg = (15, 20, 25)
         meta_fg = (83, 100, 113)
-    accent = (29, 161, 242)
+    accent = _hex_to_rgb(get_brand_color("brand_color", "#1da1f2"))
 
     # Card geometry — centered, ~85% of width, height auto-computed.
     card_pad = int(28 * scale)
@@ -327,12 +331,19 @@ def render_top_five_panel(
     size: tuple[int, int],
     out_path: Path,
 ) -> Path:
-    """Render one beat of a Top-N countdown."""
+    """Render one beat of a Top-N countdown.
+
+    The brand kit (Phase 6) overrides:
+      - background ←  ``accent_color`` if set
+      - rank/title accent ←  ``brand_color`` if set
+    Falls back to the per-call ``background_color`` + the default
+    yellow accent when no kit is active.
+    """
     width, height = size
     scale = width / 480.0
-    bg = _hex_to_rgb(background_color)
+    bg = _hex_to_rgb(get_brand_color("accent_color", background_color))
     fg = _readable_fg(bg)
-    accent = (255, 196, 0)
+    accent = _hex_to_rgb(get_brand_color("brand_color", "#ffc400"))
 
     img = Image.new("RGB", size, color=bg)
     draw = ImageDraw.Draw(img)

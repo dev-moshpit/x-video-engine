@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import {
   clearRenderFeedback,
   createRender,
+  createRenderBatch,
   getProject,
   getRender,
   previewPlan,
@@ -126,6 +127,26 @@ export default function ProjectPage({
     }
   }
 
+  async function onRenderBatch(count: number) {
+    setSubmitting(true);
+    setNeedsUpgrade(false);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("not signed in");
+      const renders = await createRenderBatch(id, count, token);
+      // Surface the first render's status in the existing card; the
+      // others poll independently via the next project-load (a refresh
+      // shows them under renders[]).
+      if (renders[0]) setRender(renders[0]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "batch render failed";
+      if (msg.includes("402")) setNeedsUpgrade(true);
+      else setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (error && !project) {
     return (
       <AppShell>
@@ -211,6 +232,14 @@ export default function ProjectPage({
                   : render && !TERMINAL.includes(render.stage)
                     ? "Render in progress…"
                     : "Render"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onRenderBatch(3)}
+                disabled={submitting}
+                title="Render 3 variations in one click — pick the winner with star/reject"
+              >
+                Render 3×
               </Button>
             </CardFooter>
           </Card>

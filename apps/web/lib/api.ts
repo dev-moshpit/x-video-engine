@@ -169,6 +169,29 @@ export const getPublishMetadata = (projectId: string, token: string) =>
     token,
   });
 
+// ─── Phase 6: brand kit ─────────────────────────────────────────────────
+
+export interface BrandKit {
+  brand_color: string | null;
+  accent_color: string | null;
+  text_color: string | null;
+  logo_url: string | null;
+  brand_name: string | null;
+}
+
+export const getBrandKit = (token: string) =>
+  apiFetch<BrandKit>("/api/me/brand-kit", { token });
+
+export const upsertBrandKit = (body: BrandKit, token: string) =>
+  apiFetch<BrandKit>("/api/me/brand-kit", {
+    method: "PUT",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const deleteBrandKit = (token: string) =>
+  apiFetch<void>("/api/me/brand-kit", { method: "DELETE", token });
+
 export interface MeResponse {
   user_id: string;
   db_user_id: string;
@@ -252,6 +275,15 @@ export const previewPlan = (
 export const createRender = (projectId: string, token: string) =>
   apiFetch<RenderSummary>(`/api/projects/${projectId}/render`, {
     method: "POST",
+    token,
+  });
+
+export const createRenderBatch = (
+  projectId: string, count: number, token: string,
+) =>
+  apiFetch<RenderSummary[]>(`/api/projects/${projectId}/render-batch`, {
+    method: "POST",
+    body: JSON.stringify({ count }),
     token,
   });
 

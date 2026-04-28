@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from app.auth.deps import CurrentDbUser
 from app.routers import (
     billing,
+    brand_kits,
     media,
     preferences,
     projects,
@@ -74,6 +75,7 @@ app.include_router(media.router)
 app.include_router(billing.router)
 app.include_router(stripe_webhook.router)
 app.include_router(publishing.router)
+app.include_router(brand_kits.router)
 
 
 class HealthResponse(BaseModel):

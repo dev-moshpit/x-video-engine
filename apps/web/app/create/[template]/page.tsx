@@ -6,6 +6,7 @@ import { use, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { MediaPickerButton } from "@/components/media-picker";
+import { RecommendationHint } from "@/components/recommendation-hint";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -277,6 +278,11 @@ function AIStoryForm({ router, getToken }: { router: RouterT; getToken: GetToken
         />
       </div>
 
+      <RecommendationHint
+        template="ai_story"
+        onApplyStyle={(v) => setStyle(v)}
+      />
+
       <div className="grid gap-2">
         <Label htmlFor="prompt">Prompt *</Label>
         <Textarea
@@ -391,6 +397,12 @@ function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetT
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+      <RecommendationHint
+        template="reddit_story"
+        onApplyCaptionStyle={(v) => setCaptionStyle(v)}
+        onApplyVoice={(v) => setVoiceName(v)}
+      />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="subreddit">Subreddit *</Label>
@@ -515,6 +527,12 @@ function VoiceoverForm({ router, getToken }: { router: RouterT; getToken: GetTok
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+      <RecommendationHint
+        template="voiceover"
+        onApplyCaptionStyle={(v) => setCaptionStyle(v)}
+        onApplyVoice={(v) => setVoiceName(v)}
+      />
+
       <div className="grid gap-2">
         <Label htmlFor="script">Script *</Label>
         <Textarea
@@ -620,6 +638,12 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+      <RecommendationHint
+        template="auto_captions"
+        onApplyCaptionStyle={(v) => setCaptionStyle(v)}
+        onApplyVoice={(v) => setVoiceName(v)}
+      />
+
       <div className="grid gap-2">
         <Label htmlFor="script">Script *</Label>
         <Textarea

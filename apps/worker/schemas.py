@@ -34,9 +34,10 @@ class RenderJobRequest(BaseModel):
     template: str
     template_input: dict
     plan_overrides: dict = {}
-    # Phase 3: tier-driven post-processing. Worker reads this to decide
-    # whether to burn the free-tier watermark over the final mp4.
+    # Phase 3: tier-driven post-processing.
     tier: str = "free"
+    # Phase 6: per-user brand identity tokens.
+    brand_kit: dict = {}
 
 
 class RenderJobStatus(BaseModel):

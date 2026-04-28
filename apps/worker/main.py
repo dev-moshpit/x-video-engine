@@ -72,8 +72,17 @@ def run_one_job(req: RenderJobRequest) -> None:
     mark_stage(req.job_id, RenderStage.RENDERING, progress=0.10)
 
     try:
+        # Phase 6: pass brand-kit tokens to the dispatcher under a
+        # reserved key. Adapters that respect branding (top_five, wyr,
+        # twitter, fake_text) read it; others ignore. Reserved key
+        # starts with underscore so it can't collide with a real
+        # template field (Pydantic ``extra="forbid"`` would reject any
+        # underscore-prefixed input from the api anyway).
+        ti = dict(req.template_input or {})
+        if req.brand_kit:
+            ti["_brand_kit"] = req.brand_kit
         final_mp4 = render_for_template(
-            req.template, req.template_input, work_dir,
+            req.template, ti, work_dir,
         )
     except Exception as e:
         # The full traceback is helpful in the worker log; the user-facing

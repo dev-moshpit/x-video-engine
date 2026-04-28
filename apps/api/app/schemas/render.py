@@ -43,6 +43,11 @@ class RenderJobRequest(BaseModel):
     # Defaults to "free" so older jobs from before this field was added
     # still watermark conservatively.
     tier: str = "free"
+    # Phase 6: per-user brand identity tokens. Empty dict when the
+    # operator hasn't set up a kit. Adapters that respect branding
+    # (top_five, would_you_rather, twitter, fake_text) read this and
+    # override their default palette; others ignore it.
+    brand_kit: dict = {}
 
 
 class RenderJobStatus(BaseModel):

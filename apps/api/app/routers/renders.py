@@ -13,14 +13,36 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 
 from app.auth.deps import CurrentDbUser
 from app.db.models import Project, Render
 from app.db.session import DbSession
+from app.routers.brand_kits import get_user_brand_kit
 from app.schemas.projects import RenderSummary
 from app.schemas.render import RenderJobRequest, RenderStage
 from app.services import billing
 from app.services.queue import enqueue_render
+
+
+def _kit_payload(db, user_id) -> dict:
+    """Project a BrandKit row into the dict shape the worker expects.
+
+    Returns empty when the user has no kit row OR all the color/logo
+    fields are NULL — saves the worker a no-op render path.
+    """
+    kit = get_user_brand_kit(db, user_id)
+    if kit is None:
+        return {}
+    fields = {
+        "brand_color": kit.brand_color,
+        "accent_color": kit.accent_color,
+        "text_color": kit.text_color,
+        "logo_url": kit.logo_url,
+        "brand_name": kit.brand_name,
+    }
+    cleaned = {k: v for k, v in fields.items() if v}
+    return cleaned
 
 
 router = APIRouter(prefix="/api", tags=["renders"])
@@ -81,6 +103,7 @@ def create_render(
             template=project.template,
             template_input=project.template_input or {},
             tier=tier,
+            brand_kit=_kit_payload(db, user.id),
         )
     )
 
@@ -95,6 +118,85 @@ def get_render(
 ) -> RenderSummary:
     render = _get_owned_render(db, user, render_id)
     return RenderSummary.model_validate(render)
+
+
+# ─── Phase 6: batch render ──────────────────────────────────────────────
+
+class BatchRenderRequest(BaseModel):
+    """Enqueue multiple renders of the same project in one click.
+
+    Each render gets a fresh seed (the worker / engine handles the
+    randomization downstream — we don't need to pre-randomize here).
+    Phase 4's selection_learning naturally surfaces the best output
+    once the batch finishes (operator stars the winner).
+    """
+    count: int = Field(..., ge=2, le=5)
+
+
+@router.post(
+    "/projects/{project_id}/render-batch",
+    response_model=list[RenderSummary],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_render_batch(
+    project_id: uuid.UUID,
+    body: BatchRenderRequest,
+    user: CurrentDbUser,
+    db: DbSession,
+) -> list[RenderSummary]:
+    """Enqueue ``body.count`` renders of one project.
+
+    Charges the user upfront for the full batch — we deliberately
+    don't atomic-refund the unconsumed renders if a mid-batch credit
+    check would have failed. That's the only race-safe path without
+    locking, and the alternative ("partial batch") is worse UX.
+    """
+    project = db.get(Project, project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+
+    cost = billing.render_cost_credits(project.template) * body.count
+    try:
+        billing.consume_credits(
+            db, user.id, cost,
+            reason=f"render_batch_consume:{project.template}:n={body.count}",
+        )
+    except billing.InsufficientCredits as exc:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"insufficient credits for batch: {exc}. "
+            f"Each render costs {billing.render_cost_credits(project.template)} "
+            f"credit(s); the batch needs {cost}. Upgrade or shrink the batch.",
+        )
+
+    tier = billing.effective_tier(db, user.id)
+    kit = _kit_payload(db, user.id)
+    out: list[RenderSummary] = []
+    for _ in range(body.count):
+        job_id = _new_job_id()
+        render = Render(
+            project_id=project.id,
+            job_id=job_id,
+            stage=RenderStage.PENDING.value,
+            progress=0.0,
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(render)
+        db.commit()
+        db.refresh(render)
+        enqueue_render(
+            RenderJobRequest(
+                job_id=job_id,
+                user_id=user.clerk_user_id,
+                project_id=str(project.id),
+                template=project.template,
+                template_input=project.template_input or {},
+                tier=tier,
+                brand_kit=kit,
+            )
+        )
+        out.append(RenderSummary.model_validate(render))
+    return out
 
 
 def _get_owned_render(db, user, render_id: uuid.UUID) -> Render:

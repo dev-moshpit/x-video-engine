@@ -256,6 +256,37 @@ class CreditLedger(Base):
     )
 
 
+class BrandKit(Base):
+    """Phase 6 — per-user brand identity tokens.
+
+    One row per user (unique on ``user_id``). Color tokens are short
+    hex strings (``#1f6feb``) and apply to the panel-color templates;
+    when fields are NULL the template falls back to its built-in palette
+    so partial brand kits still work.
+    """
+    __tablename__ = "brand_kits"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True, index=True, nullable=False,
+    )
+    brand_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    accent_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    text_color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    brand_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utcnow, onupdate=_utcnow,
+    )
+
+
 class MediaAsset(Base):
     """Phase 2.5 — saved media library entry.
 
