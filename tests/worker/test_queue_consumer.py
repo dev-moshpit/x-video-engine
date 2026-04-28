@@ -195,6 +195,19 @@ def test_run_one_job_dispatches_and_marks_complete(fake_redis, shared_engine, tm
     assert row.final_mp4_url == "http://example.invalid/foo/job_dispatch_ok.mp4"
     assert row.completed_at is not None
 
+    # PR 11: usage rows written on success.
+    with shared_engine.connect() as conn:
+        usage_rows = conn.execute(
+            text(
+                "SELECT kind, value FROM usage WHERE user_id = :u "
+                "ORDER BY kind"
+            ),
+            {"u": user_id},
+        ).all()
+    kinds = {kind: float(value) for kind, value in usage_rows}
+    assert kinds.get("exports") == 1.0
+    assert "render_seconds" in kinds and kinds["render_seconds"] >= 0.0
+
 
 def test_run_one_job_marks_failed_on_exception(fake_redis, shared_engine, tmp_path):
     import uuid as _uuid

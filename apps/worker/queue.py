@@ -145,3 +145,48 @@ def mark_stage(job_id: str, stage: RenderStage, *, progress: float) -> None:
         progress=progress,
         set_completed_now=is_terminal,
     )
+
+
+# ─── Usage writes (PR 11) ───────────────────────────────────────────────
+
+def get_user_id_for_render(job_id: str) -> Optional[str]:
+    """Resolve the owning user's UUID for a render's ``job_id``.
+
+    Goes via the projects table (renders.project_id → projects.id →
+    projects.user_id). Returns the UUID as a string, or None if the
+    job_id is unknown.
+    """
+    sql = (
+        "SELECT projects.user_id FROM renders "
+        "JOIN projects ON projects.id = renders.project_id "
+        "WHERE renders.job_id = :job_id"
+    )
+    with get_engine().connect() as conn:
+        row = conn.execute(text(sql), {"job_id": job_id}).first()
+    return str(row[0]) if row else None
+
+
+def record_usage(user_id: str, kind: str, value: float) -> None:
+    """Insert one ``usage`` row.
+
+    Cheap fire-and-forget — billing reads aggregates from this table
+    in Phase 3. ``kind`` is one of: render_seconds, exports.
+    Phase 2 will add tts_seconds + caption_seconds when the worker
+    surfaces those numbers from the adapter.
+    """
+    import uuid as _uuid
+    sql = (
+        "INSERT INTO usage (id, user_id, kind, value, created_at) "
+        "VALUES (:id, :uid, :k, :v, :now)"
+    )
+    with get_engine().begin() as conn:
+        conn.execute(
+            text(sql),
+            {
+                "id": str(_uuid.uuid4()),
+                "uid": user_id,
+                "k": kind,
+                "v": float(value),
+                "now": datetime.now(timezone.utc),
+            },
+        )

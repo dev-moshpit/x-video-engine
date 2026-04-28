@@ -28,6 +28,7 @@ import tempfile
 import time
 import traceback
 from pathlib import Path
+from time import monotonic
 
 # Make the project root importable so the worker can pull from xvideo.*
 # and apps.worker.* without a custom PYTHONPATH at process start.
@@ -36,7 +37,9 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 
 from apps.worker.queue import (  # noqa: E402
     consume_one,
+    get_user_id_for_render,
     mark_stage,
+    record_usage,
     update_render_status,
 )
 from apps.worker.render_adapters import render_for_template  # noqa: E402
@@ -63,6 +66,7 @@ def run_one_job(req: RenderJobRequest) -> None:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("[%s] template=%s starting", req.job_id, req.template)
+    started = monotonic()
     mark_stage(req.job_id, RenderStage.SCRIPTING, progress=0.05)
     mark_stage(req.job_id, RenderStage.RENDERING, progress=0.10)
 
@@ -107,6 +111,21 @@ def run_one_job(req: RenderJobRequest) -> None:
         final_mp4_url=public_url,
         set_completed_now=True,
     )
+
+    # PR 11: usage tracking. Best-effort — a failure here doesn't fail
+    # the render itself (the user already has their MP4).
+    try:
+        elapsed_sec = monotonic() - started
+        db_user_id = get_user_id_for_render(req.job_id)
+        if db_user_id:
+            record_usage(db_user_id, "render_seconds", elapsed_sec)
+            record_usage(db_user_id, "exports", 1.0)
+        else:
+            log.warning(
+                "[%s] could not resolve user_id for usage row", req.job_id,
+            )
+    except Exception:
+        log.exception("[%s] usage write failed", req.job_id)
 
 
 def main() -> int:
