@@ -26,7 +26,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.auth.deps import CurrentDbUser
-from app.routers import projects, renders, templates, uploads, usage, webhooks
+from app.routers import (
+    preferences,
+    projects,
+    renders,
+    templates,
+    uploads,
+    usage,
+    webhooks,
+)
 
 
 app = FastAPI(title="x-video-engine SaaS API", version="0.1.0")
@@ -57,6 +65,7 @@ app.include_router(projects.router)
 app.include_router(renders.router)
 app.include_router(uploads.router)
 app.include_router(usage.router)
+app.include_router(preferences.router)
 
 
 class HealthResponse(BaseModel):
