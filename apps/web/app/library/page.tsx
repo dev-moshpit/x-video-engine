@@ -40,6 +40,7 @@ export default function LibraryPage() {
   const [searchWarnings, setSearchWarnings] = useState<string[]>([]);
   const [searching, startSearch] = useTransition();
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<MediaAsset | null>(null);
 
   const reloadAssets = async () => {
     setLoadingAssets(true);
@@ -236,10 +237,15 @@ export default function LibraryPage() {
               asset={a}
               onCopy={() => copyUrl(a.url)}
               onDelete={() => onDelete(a.id)}
+              onPreview={() => setPreview(a)}
             />
           ))}
         </div>
       )}
+
+      {preview ? (
+        <PreviewModal asset={preview} onClose={() => setPreview(null)} />
+      ) : null}
     </AppShell>
   );
 }
@@ -290,15 +296,22 @@ function AssetCard({
   asset,
   onCopy,
   onDelete,
+  onPreview,
 }: {
   asset: MediaAsset;
   onCopy: () => void;
   onDelete: () => void;
+  onPreview: () => void;
 }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="aspect-video overflow-hidden rounded-md bg-zinc-900">
+        <button
+          type="button"
+          onClick={onPreview}
+          className="aspect-video w-full overflow-hidden rounded-md bg-zinc-900 transition hover:opacity-90"
+          title="Preview"
+        >
           {asset.thumbnail_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -308,10 +321,10 @@ function AssetCard({
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-zinc-600">
-              no preview
+              click to preview
             </div>
           )}
-        </div>
+        </button>
       </CardHeader>
       <CardContent className="text-xs text-zinc-400">
         <div className="truncate">{asset.attribution || asset.provider}</div>
@@ -334,5 +347,72 @@ function AssetCard({
         </button>
       </CardFooter>
     </Card>
+  );
+}
+
+
+function PreviewModal({
+  asset, onClose,
+}: {
+  asset: MediaAsset;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-3xl flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-zinc-200">
+            {asset.attribution || asset.provider}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-xs text-zinc-400 hover:text-zinc-100"
+          >
+            close ✕
+          </button>
+        </div>
+        <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
+          {asset.kind === "video" ? (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              src={asset.url}
+              controls
+              autoPlay
+              loop
+              muted
+              className="h-full w-full"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={asset.url}
+              alt={asset.attribution || ""}
+              className="h-full w-full object-contain"
+            />
+          )}
+        </div>
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <div>
+            {asset.width && asset.height ? `${asset.width}×${asset.height}` : ""}
+            {asset.duration_sec ? ` · ${asset.duration_sec.toFixed(1)}s` : ""}
+            {asset.orientation ? ` · ${asset.orientation}` : ""}
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(asset.url).catch(() => {});
+            }}
+            className="rounded-md border border-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-900"
+          >
+            Copy URL
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

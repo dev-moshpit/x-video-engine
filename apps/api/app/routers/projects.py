@@ -13,6 +13,7 @@ sub-second, no GPU. Heavy rendering goes through PR 6's queue.
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
@@ -176,4 +177,19 @@ def generate_plan(
         seed=body.seed,
         score_and_filter=body.score_and_filter,
     )
-    return PlanResponse(plans=[GeneratedPlan(**p) for p in raw_plans])
+    plans = [GeneratedPlan(**p) for p in raw_plans]
+    # Phase 4: pick the highest-scoring variation. Ties break on
+    # earliest position so the generation order is preserved when
+    # plans tied — matches what the operator sees scrolling the list.
+    recommended_index: Optional[int] = None
+    if plans:
+        best = max(
+            range(len(plans)),
+            key=lambda i: (
+                plans[i].score.get("total", 0.0)
+                if isinstance(plans[i].score, dict)
+                else 0.0
+            ),
+        )
+        recommended_index = best
+    return PlanResponse(plans=plans, recommended_index=recommended_index)

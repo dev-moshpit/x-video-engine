@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { MediaPickerButton } from "@/components/media-picker";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -639,21 +640,32 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="audio_url">Audio URL (optional)</Label>
-          <Input
-            id="audio_url"
-            placeholder="https://… .mp3 / .wav"
-            value={audioUrl}
-            onChange={(e) => setAudioUrl(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="audio_url"
+              placeholder="https://… .mp3 / .wav"
+              value={audioUrl}
+              onChange={(e) => setAudioUrl(e.target.value)}
+              className="flex-1"
+            />
+          </div>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="video_url">Video URL (optional)</Label>
-          <Input
-            id="video_url"
-            placeholder="https://… .mp4"
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="video_url"
+              placeholder="https://… .mp4"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="flex-1"
+            />
+            <MediaPickerButton
+              kind="video"
+              label="Pick"
+              onPick={(url) => setVideoUrl(url)}
+            />
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -1112,15 +1124,34 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
       </div>
       <div className="grid gap-2">
         <Label>Main clip URL</Label>
-        <Input
-          placeholder="https://… or local path under work_dir"
-          value={mainUrl}
-          onChange={(e) => setMainUrl(e.target.value)}
-        />
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://… or paste from your library"
+            value={mainUrl}
+            onChange={(e) => setMainUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Pick from library"
+            onPick={(url) => setMainUrl(url)}
+          />
+        </div>
       </div>
       <div className="grid gap-2">
         <Label>Filler clip URL (optional, gameplay/satisfying)</Label>
-        <Input value={fillerUrl} onChange={(e) => setFillerUrl(e.target.value)} />
+        <div className="flex gap-2">
+          <Input
+            value={fillerUrl}
+            onChange={(e) => setFillerUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Pick"
+            onPick={(url) => setFillerUrl(url)}
+          />
+        </div>
       </div>
       <div className="grid gap-2">
         <Label>Script *</Label>
@@ -1533,11 +1564,19 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
       </div>
       <div className="grid gap-2">
         <Label>Background URL (Roblox / gameplay clip, optional)</Label>
-        <Input
-          placeholder="https://… or local path"
-          value={bgUrl}
-          onChange={(e) => setBgUrl(e.target.value)}
-        />
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://… or paste from your library"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Pick from library"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="grid gap-2">

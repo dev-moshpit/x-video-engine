@@ -4,6 +4,8 @@ import { useAuth } from "@clerk/nextjs";
 import { use, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { ProjectEditor } from "@/components/project-editor";
+import { PublishPanel } from "@/components/publish-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,9 +42,11 @@ export default function ProjectPage({
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [plans, setPlans] = useState<GeneratedPlan[]>([]);
+  const [recommendedIndex, setRecommendedIndex] = useState<number | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [render, setRender] = useState<RenderSummary | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
 
   // Initial project load
   useEffect(() => {
@@ -84,13 +88,17 @@ export default function ProjectPage({
     return () => clearInterval(t);
   }, [render, getToken]);
 
-  async function onPreview() {
+  async function onPreview(variations: number = 1) {
     setPreviewing(true);
+    setError(null);
     try {
       const token = await getToken();
       if (!token) throw new Error("not signed in");
-      const res = await previewPlan(id, { variations: 1 }, token);
+      const res = await previewPlan(id, { variations }, token);
       setPlans(res.plans);
+      setRecommendedIndex(
+        typeof res.recommended_index === "number" ? res.recommended_index : null,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "preview failed");
     } finally {
@@ -100,13 +108,19 @@ export default function ProjectPage({
 
   async function onRender() {
     setSubmitting(true);
+    setNeedsUpgrade(false);
     try {
       const token = await getToken();
       if (!token) throw new Error("not signed in");
       const r = await createRender(id, token);
       setRender(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "render failed");
+      const msg = e instanceof Error ? e.message : "render failed";
+      // Phase 3: 402 Payment Required — show the upgrade prompt
+      // instead of a generic error banner so the user knows what to
+      // do next.
+      if (msg.includes("402")) setNeedsUpgrade(true);
+      else setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -152,20 +166,39 @@ export default function ProjectPage({
                 Pydantic-validated payload sent to the worker.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <pre className="overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-300">
                 {JSON.stringify(project.template_input, null, 2)}
               </pre>
+              <ProjectEditor
+                projectId={project.id}
+                template={project.template}
+                initialInput={project.template_input}
+                onSaved={(next) =>
+                  setProject((p) =>
+                    p ? { ...p, template_input: next } : p,
+                  )
+                }
+              />
             </CardContent>
             <CardFooter>
               {supportsPlanPreview ? (
-                <Button
-                  variant="outline"
-                  onClick={onPreview}
-                  disabled={previewing}
-                >
-                  {previewing ? "Generating…" : "Preview plan"}
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => onPreview(1)}
+                    disabled={previewing}
+                  >
+                    {previewing ? "Generating…" : "Preview plan"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => onPreview(5)}
+                    disabled={previewing}
+                  >
+                    Generate 5 variations
+                  </Button>
+                </>
               ) : null}
               <Button
                 onClick={onRender}
@@ -183,6 +216,13 @@ export default function ProjectPage({
           </Card>
 
           {render ? <RenderStatusCard render={render} /> : null}
+
+          {render && render.stage === "complete" && render.final_mp4_url ? (
+            <PublishPanel
+              projectId={project.id}
+              finalMp4Url={render.final_mp4_url}
+            />
+          ) : null}
         </section>
 
         <section className="grid gap-4">
@@ -198,10 +238,33 @@ export default function ProjectPage({
               </CardHeader>
             </Card>
           ) : (
-            plans.map((p, i) => <PlanCard key={i} plan={p} />)
+            plans.map((p, i) => (
+              <PlanCard
+                key={i}
+                plan={p}
+                index={i}
+                isRecommended={recommendedIndex === i && plans.length > 1}
+              />
+            ))
           )}
         </section>
       </div>
+
+      {needsUpgrade ? (
+        <Card className="mt-6 border-amber-700/60 bg-amber-950/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="text-sm text-amber-100">
+              <div className="font-medium">You&apos;re out of render credits.</div>
+              <div className="text-xs text-amber-200/80">
+                Upgrade your plan to keep rendering. Free tier refills monthly.
+              </div>
+            </div>
+            <a href="/pricing">
+              <Button>Upgrade →</Button>
+            </a>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {error ? (
         <Card className="mt-6 border-red-900 bg-red-950/30">
@@ -212,14 +275,33 @@ export default function ProjectPage({
   );
 }
 
-function PlanCard({ plan }: { plan: GeneratedPlan }) {
+function PlanCard({
+  plan, index = 0, isRecommended = false,
+}: {
+  plan: GeneratedPlan;
+  index?: number;
+  isRecommended?: boolean;
+}) {
   const { video_plan: vp, score, warnings } = plan;
   return (
-    <Card>
+    <Card
+      className={
+        isRecommended
+          ? "border-emerald-700/60 ring-1 ring-emerald-700/40"
+          : ""
+      }
+    >
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>{vp.title}</CardTitle>
+            <div className="mb-1 flex items-center gap-2">
+              <CardTitle>{vp.title}</CardTitle>
+              {isRecommended ? (
+                <Badge tone="ok">recommended (highest score)</Badge>
+              ) : (
+                <Badge tone="muted">variation {index + 1}</Badge>
+              )}
+            </div>
             <CardDescription className="mt-1 italic">{vp.hook}</CardDescription>
           </div>
           <Badge tone={score.total >= 70 ? "ok" : "warn"}>

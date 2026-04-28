@@ -1,13 +1,14 @@
-"""Per-user preference profile (PR 13).
+"""Per-user preference profile + Phase 4 recommendations.
 
-GET /api/me/preferences  →  aggregated star/reject feedback for the
-authenticated user. Read-only; the underlying signal is the
-``renders.starred`` column written by PR 12's feedback endpoints.
+  GET  /api/me/preferences            aggregated feedback + per-template
+                                      success/star rates
+  GET  /api/me/recommendations/{tpl}  best caption_style + voice + style
+                                      for the (user, template) pair
 
-The frontend can use this to surface "you usually star X" hints on
-the create-project form. Phase 1.5+ will wire the same signal into
-the scorer's re-ranking step so future plan variations get nudged
-toward the user's pattern.
+Read-only; underlying signal is ``renders.starred`` + ``renders.stage``.
+Used by the frontend to pre-fill the create-project form with the
+operator's high-success defaults and to highlight "winning" template
+variations.
 """
 
 from __future__ import annotations
@@ -19,10 +20,23 @@ from pydantic import BaseModel, Field
 
 from app.auth.deps import CurrentDbUser
 from app.db.session import DbSession
-from app.services.selection_learning import compute_user_preferences
+from app.services.selection_learning import (
+    compute_user_preferences,
+    recommend_defaults,
+)
 
 
 router = APIRouter(prefix="/api/me", tags=["preferences"])
+
+
+class TemplateMetrics(BaseModel):
+    renders: int = 0
+    completed: int = 0
+    failed: int = 0
+    starred: int = 0
+    rejected: int = 0
+    success_rate: float = 0.0
+    star_rate: float = 0.0
 
 
 class PreferenceProfile(BaseModel):
@@ -34,6 +48,16 @@ class PreferenceProfile(BaseModel):
     top_template: Optional[str] = None
     top_caption_style: Optional[str] = None
     top_voice: Optional[str] = None
+    # Phase 4 — per-template breakdown.
+    per_template: dict[str, TemplateMetrics] = Field(default_factory=dict)
+
+
+class Recommendations(BaseModel):
+    template: str
+    caption_style: Optional[str] = None
+    voice_name: Optional[str] = None
+    style: Optional[str] = None
+    reasons: dict[str, str] = Field(default_factory=dict)
 
 
 @router.get("/preferences", response_model=PreferenceProfile)
@@ -41,3 +65,13 @@ def get_preferences(
     user: CurrentDbUser, db: DbSession,
 ) -> PreferenceProfile:
     return PreferenceProfile(**compute_user_preferences(db, user.id))
+
+
+@router.get(
+    "/recommendations/{template}",
+    response_model=Recommendations,
+)
+def get_recommendations(
+    template: str, user: CurrentDbUser, db: DbSession,
+) -> Recommendations:
+    return Recommendations(**recommend_defaults(db, user.id, template))

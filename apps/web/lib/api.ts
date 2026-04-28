@@ -111,7 +111,63 @@ export interface GeneratedPlan {
 
 export interface PlanResponse {
   plans: GeneratedPlan[];
+  recommended_index?: number | null;
 }
+
+// ─── Phase 4: preferences + recommendations ──────────────────────────────
+
+export interface TemplateMetrics {
+  renders: number;
+  completed: number;
+  failed: number;
+  starred: number;
+  rejected: number;
+  success_rate: number;
+  star_rate: number;
+}
+
+export interface PreferenceProfile {
+  starred_count: number;
+  rejected_count: number;
+  templates: Record<string, number>;
+  caption_styles: Record<string, number>;
+  voices: Record<string, number>;
+  top_template: string | null;
+  top_caption_style: string | null;
+  top_voice: string | null;
+  per_template: Record<string, TemplateMetrics>;
+}
+
+export interface Recommendations {
+  template: string;
+  caption_style: string | null;
+  voice_name: string | null;
+  style: string | null;
+  reasons: Record<string, string>;
+}
+
+export const getPreferences = (token: string) =>
+  apiFetch<PreferenceProfile>("/api/me/preferences", { token });
+
+export const getRecommendations = (template: string, token: string) =>
+  apiFetch<Recommendations>(
+    `/api/me/recommendations/${encodeURIComponent(template)}`,
+    { token },
+  );
+
+// ─── Phase 7: publishing metadata ───────────────────────────────────────
+
+export interface PublishMetadata {
+  title: string;
+  description: string;
+  hashtags: string[];
+  alternates: string[];
+}
+
+export const getPublishMetadata = (projectId: string, token: string) =>
+  apiFetch<PublishMetadata>(`/api/projects/${projectId}/publish-metadata`, {
+    token,
+  });
 
 export interface MeResponse {
   user_id: string;
@@ -167,6 +223,17 @@ export const createProject = (
 ) =>
   apiFetch<Project>("/api/projects", {
     method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const updateProject = (
+  projectId: string,
+  body: { name?: string; template_input?: Record<string, unknown> },
+  token: string,
+) =>
+  apiFetch<Project>(`/api/projects/${projectId}`, {
+    method: "PATCH",
     body: JSON.stringify(body),
     token,
   });
@@ -284,3 +351,49 @@ export const listMediaAssets = (
 
 export const deleteMediaAsset = (id: string, token: string) =>
   apiFetch<void>(`/api/media/${id}`, { method: "DELETE", token });
+
+// ─── Billing (Phase 3) ──────────────────────────────────────────────────
+
+export interface TierInfo {
+  name: string;
+  display_name: string;
+  monthly_credits: number;
+  watermark: boolean;
+  concurrent_renders: number;
+  purchaseable: boolean;
+}
+
+export interface BillingStatus {
+  tier: string;
+  balance: number;
+  monthly_credits: number;
+  watermark: boolean;
+  has_active_subscription: boolean;
+  stripe_customer_id: string | null;
+  current_period_end: string | null;
+}
+
+export const listTiers = () => apiFetch<TierInfo[]>("/api/billing/tiers");
+
+export const getBillingStatus = (token: string) =>
+  apiFetch<BillingStatus>("/api/billing", { token });
+
+export const createCheckout = (
+  body: { tier: "pro" | "business"; success_url: string; cancel_url: string },
+  token: string,
+) =>
+  apiFetch<{ url: string }>("/api/billing/checkout", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const createPortal = (
+  body: { return_url: string },
+  token: string,
+) =>
+  apiFetch<{ url: string }>("/api/billing/portal", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });

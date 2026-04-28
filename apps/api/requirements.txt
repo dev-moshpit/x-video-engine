@@ -23,6 +23,18 @@ redis>=5.0
 # Object storage — presign URLs (PR 7)
 boto3>=1.34
 
+# Media library — provider HTTP (Pexels/Pixabay) — Phase 2.5
+httpx>=0.27
+
+# Stripe (Phase 3 billing).
+# Optional at runtime — billing.create_checkout_session / portal /
+# webhook signature-verify all raise StripeUnavailable when the
+# STRIPE_SECRET_KEY env var is missing OR this SDK isn't importable,
+# and the routers translate that to a 503. Pinning here so production
+# deploys have it; local dev can omit the install if not testing
+# checkout.
+stripe>=8.0
+
 # Clerk JWT verification (PR 2): RS256 + JWKS
 pyjwt[crypto]>=2.8
 

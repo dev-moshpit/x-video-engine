@@ -31,6 +31,7 @@ from app.routers import (
     media,
     preferences,
     projects,
+    publishing,
     renders,
     stripe_webhook,
     templates,
@@ -72,6 +73,7 @@ app.include_router(preferences.router)
 app.include_router(media.router)
 app.include_router(billing.router)
 app.include_router(stripe_webhook.router)
+app.include_router(publishing.router)
 
 
 class HealthResponse(BaseModel):

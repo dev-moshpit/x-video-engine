@@ -77,3 +77,7 @@ class GeneratedPlan(BaseModel):
 
 class PlanResponse(BaseModel):
     plans: list[GeneratedPlan]
+    # Phase 4: index into ``plans`` of the highest-scoring variation,
+    # or None when the list is empty. Frontend uses it to highlight
+    # the recommended pick when the operator generated >1 variation.
+    recommended_index: Optional[int] = None
