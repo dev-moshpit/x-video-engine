@@ -21,13 +21,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 import redis
 from sqlalchemy import create_engine, text
 
-from apps.worker.schemas import RenderJobRequest, RenderStage
+from apps.worker.schemas import ExportJobRequest, RenderJobRequest, RenderStage
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 QUEUE_KEY = "saas:render:jobs"
+EXPORT_QUEUE_KEY = "saas:export:jobs"
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -97,6 +99,51 @@ def consume_one(timeout_sec: int = 5) -> Optional[RenderJobRequest]:
         return None
     _key, raw = res
     return RenderJobRequest.model_validate_json(raw)
+
+
+def consume_export_one(timeout_sec: int = 5) -> Optional[ExportJobRequest]:
+    """BLPOP one export-variant job. None on timeout."""
+    res = get_redis().blpop([EXPORT_QUEUE_KEY], timeout=timeout_sec)
+    if res is None:
+        return None
+    _key, raw = res
+    return ExportJobRequest.model_validate_json(raw)
+
+
+def update_artifact(
+    artifact_id: str,
+    *,
+    status: Optional[str] = None,
+    url: Optional[str] = None,
+    error: Optional[str] = None,
+) -> None:
+    sets: list[str] = []
+    # SQLAlchemy's ``Uuid`` column type stores values as 32-char hex
+    # without dashes on SQLite (and as a native UUID on Postgres, which
+    # also accepts the dash-less hex form). The artifact_id arrives here
+    # as ``str(uuid)`` from the API enqueue step, which is the dashed
+    # form — bind that directly through ``text()`` and SQLite returns
+    # zero rows updated, leaving the artifact at "pending" forever.
+    # Normalising to ``.hex`` matches both backends.
+    try:
+        normalized_id = uuid.UUID(str(artifact_id)).hex
+    except (ValueError, AttributeError):
+        normalized_id = artifact_id  # let DB raise on garbage input
+    params: dict = {"id": normalized_id}
+    if status is not None:
+        sets.append("status = :status")
+        params["status"] = status
+    if url is not None:
+        sets.append("url = :url")
+        params["url"] = url
+    if error is not None:
+        sets.append("error = :error")
+        params["error"] = error
+    if not sets:
+        return
+    sql = f"UPDATE render_artifacts SET {', '.join(sets)} WHERE id = :id"
+    with get_engine().begin() as conn:
+        conn.execute(text(sql), params)
 
 
 # ─── Status writes ──────────────────────────────────────────────────────

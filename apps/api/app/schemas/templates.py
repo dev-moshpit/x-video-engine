@@ -212,7 +212,12 @@ class TwitterInput(BaseModel):
     dark_mode: bool = True
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
-    caption_style: Optional[str] = "bold_word"
+    # The tweet card already burns the tweet text on screen as the
+    # primary visual. Burning word-by-word captions on top collides with
+    # the metrics row at the bottom of the card (verified on the QA
+    # contact sheet). ``minimal_lower_third`` is small + low enough to
+    # sit clear of the card; operators can still override.
+    caption_style: Optional[str] = "minimal_lower_third"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
     background_url: Optional[str] = None

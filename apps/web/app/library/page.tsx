@@ -25,6 +25,7 @@ import {
 
 type Kind = "video" | "image";
 type Orientation = "any" | "vertical" | "horizontal" | "square";
+type SavedKindFilter = "all" | "video" | "image";
 
 export default function LibraryPage() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -32,6 +33,9 @@ export default function LibraryPage() {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [savedKindFilter, setSavedKindFilter] = useState<SavedKindFilter>("all");
+  const [savedOrientation, setSavedOrientation] = useState<Orientation>("any");
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Kind>("video");
@@ -48,7 +52,13 @@ export default function LibraryPage() {
     try {
       const token = await getToken();
       if (!token) throw new Error("not signed in");
-      setAssets(await listMediaAssets(token));
+      const filters: {
+        kind?: "video" | "image";
+        orientation?: "vertical" | "horizontal" | "square";
+      } = {};
+      if (savedKindFilter !== "all") filters.kind = savedKindFilter;
+      if (savedOrientation !== "any") filters.orientation = savedOrientation;
+      setAssets(await listMediaAssets(token, filters));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "load failed");
     } finally {
@@ -59,7 +69,7 @@ export default function LibraryPage() {
   useEffect(() => {
     if (isLoaded && isSignedIn) reloadAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, savedKindFilter, savedOrientation]);
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,11 +223,34 @@ export default function LibraryPage() {
       </Card>
 
       {/* ─── Saved assets ───────────────────────────────────────────────── */}
-      <div className="mb-4 flex items-end justify-between">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-lg font-semibold">Saved ({assets.length})</h2>
-        {loadingAssets ? (
-          <span className="text-xs text-zinc-500">Loading…</span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3 text-[11px]">
+          <FilterChips
+            label="Kind"
+            value={savedKindFilter}
+            onChange={(v) => setSavedKindFilter(v as SavedKindFilter)}
+            options={[
+              { id: "all", label: "All" },
+              { id: "video", label: "Video" },
+              { id: "image", label: "Image" },
+            ]}
+          />
+          <FilterChips
+            label="Orient."
+            value={savedOrientation}
+            onChange={(v) => setSavedOrientation(v as Orientation)}
+            options={[
+              { id: "any", label: "Any" },
+              { id: "vertical", label: "9:16" },
+              { id: "horizontal", label: "16:9" },
+              { id: "square", label: "1:1" },
+            ]}
+          />
+          {loadingAssets ? (
+            <span className="text-xs text-zinc-500">Loading…</span>
+          ) : null}
+        </div>
       </div>
       {loadError ? (
         <div className="mb-4 rounded-md border border-red-900 bg-red-950/30 p-3 text-xs text-red-200">
@@ -225,10 +258,15 @@ export default function LibraryPage() {
         </div>
       ) : null}
       {assets.length === 0 && !loadingAssets ? (
-        <p className="text-sm text-zinc-500">
-          Nothing saved yet — search above and click{" "}
-          <span className="font-mono text-zinc-300">Save</span>.
-        </p>
+        <SavedEmptyState
+          filtered={
+            savedKindFilter !== "all" || savedOrientation !== "any"
+          }
+          onClear={() => {
+            setSavedKindFilter("all");
+            setSavedOrientation("any");
+          }}
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           {assets.map((a) => (
@@ -284,8 +322,8 @@ function SearchHitCard({
         </div>
       </CardContent>
       <CardFooter>
-        <Button onClick={() => onSave(hit)} className="ml-auto">
-          Save
+        <Button onClick={() => onSave(hit)} className="ml-auto" size="sm">
+          + Save to library
         </Button>
       </CardFooter>
     </Card>
@@ -303,16 +341,20 @@ function AssetCard({
   onDelete: () => void;
   onPreview: () => void;
 }) {
+  const isAudio = (asset.kind as string) === "audio";
+  const isVideo = asset.kind === "video";
+  const kindLabel = isAudio ? "♪ AUDIO" : isVideo ? "▶ VIDEO" : "◧ IMAGE";
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <button
           type="button"
           onClick={onPreview}
-          className="aspect-video w-full overflow-hidden rounded-md bg-zinc-900 transition hover:opacity-90"
+          className="relative aspect-video w-full overflow-hidden rounded-md bg-zinc-900 transition hover:opacity-90"
           title="Preview"
         >
-          {asset.thumbnail_url ? (
+          {asset.thumbnail_url && !isAudio ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={asset.thumbnail_url}
@@ -320,10 +362,21 @@ function AssetCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-zinc-600">
-              click to preview
+            <div className="flex h-full flex-col items-center justify-center gap-1 text-xs text-zinc-500">
+              <span className="text-2xl">
+                {isAudio ? "♪" : isVideo ? "▶" : "◧"}
+              </span>
+              <span>{isAudio ? "audio file" : "click to preview"}</span>
             </div>
           )}
+          <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-zinc-100">
+            {kindLabel}
+          </span>
+          {isVideo && asset.duration_sec ? (
+            <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-zinc-100">
+              {asset.duration_sec.toFixed(1)}s
+            </span>
+          ) : null}
         </button>
       </CardHeader>
       <CardContent className="text-xs text-zinc-400">
@@ -335,9 +388,13 @@ function AssetCard({
         </div>
       </CardContent>
       <CardFooter className="flex items-center justify-between gap-2">
-        <Button onClick={onCopy} className="text-xs">
+        <button
+          type="button"
+          onClick={onCopy}
+          className="text-xs text-zinc-300 underline-offset-2 hover:text-zinc-100 hover:underline"
+        >
           Copy URL
-        </Button>
+        </button>
         <button
           type="button"
           onClick={onDelete}
@@ -347,6 +404,68 @@ function AssetCard({
         </button>
       </CardFooter>
     </Card>
+  );
+}
+
+
+function FilterChips<T extends string>({
+  label, value, onChange, options,
+}: {
+  label: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: ReadonlyArray<{ id: T; label: string }>;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-zinc-500">{label}:</span>
+      <span className="inline-flex gap-1">
+        {options.map((o) => (
+          <button
+            type="button"
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            className={
+              "rounded-full px-2 py-0.5 " +
+              (value === o.id
+                ? "bg-blue-600 text-white"
+                : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800")
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+
+function SavedEmptyState({
+  filtered, onClear,
+}: { filtered: boolean; onClear: () => void }) {
+  if (filtered) {
+    return (
+      <div className="rounded-md border border-zinc-900 bg-zinc-950/50 p-6 text-center text-sm text-zinc-400">
+        No saved assets match the active filters.
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-2 text-blue-400 underline-offset-4 hover:underline"
+        >
+          Clear filters
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-zinc-900 bg-zinc-950/50 p-6 text-center text-sm text-zinc-400">
+      <div className="text-zinc-300">Your library is empty.</div>
+      <div className="mt-1 text-xs text-zinc-500">
+        Search Pexels / Pixabay above and click <strong>Save</strong> to keep an
+        asset around — or pick one straight from a template form.
+      </div>
+    </div>
   );
 }
 

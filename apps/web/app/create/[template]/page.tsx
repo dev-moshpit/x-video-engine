@@ -744,6 +744,8 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
   const [bgUrl, setBgUrl] = useState("");
   const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -767,6 +769,8 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
               ...(audioUrl ? { audio_url: audioUrl } : {}),
               ...(videoUrl ? { video_url: videoUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -819,7 +823,7 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
               className="flex-1"
             />
             <MediaPickerButton
-              kind="video"
+              kind="audio"
               label="Select from Library"
               onPick={(url) => setAudioUrl(url)}
             />
@@ -896,6 +900,9 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
         <Label htmlFor="voice_name">Voice</Label>
         <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
 
@@ -1196,6 +1203,8 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1222,6 +1231,8 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
               aspect,
               caption_style: captionStyle,
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -1329,6 +1340,9 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
         <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
 
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
+
       <ErrorBox error={error} />
       <div>
         <Button type="submit" disabled={submitting || optionA.length < 1 || optionB.length < 1 || question.length < 10}>
@@ -1354,6 +1368,8 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
   const [bgColor, setBgColor] = useState("#0b0b0f");
   const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1379,6 +1395,8 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
               ...(mainUrl ? { main_url: mainUrl } : {}),
               ...(fillerUrl ? { filler_url: fillerUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -1502,6 +1520,9 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
         </div>
       </div>
 
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
+
       <ErrorBox error={error} />
       <div>
         <Button type="submit" disabled={submitting || script.length < 10}>
@@ -1531,6 +1552,8 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
   const [captionStyle, setCaptionStyle] = useState("bold_word");
   const [bgColor, setBgColor] = useState("#0b0b0f");
   const [bgUrl, setBgUrl] = useState("");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1563,6 +1586,8 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
               ...(bgUrl ? { background_url: bgUrl } : {}),
               caption_style: captionStyle,
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -1691,6 +1716,9 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
           />
         </div>
       </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
       <div>
@@ -1889,6 +1917,8 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1910,6 +1940,8 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
               caption_style: captionStyle,
               ...(bgUrl ? { background_url: bgUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -1976,6 +2008,9 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
         <Label>Voice</Label>
         <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
       <div>

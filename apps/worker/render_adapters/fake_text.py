@@ -227,14 +227,14 @@ def render(input: FakeTextInput, work_dir: Path) -> Path:
         work_dir=work_dir,
     )
 
+    # The chat bubbles are themselves the readable text for this template;
+    # burning word-by-word captions on top of them duplicates the content
+    # AND collides with the bubble area (verified on QA contact sheet —
+    # captions landed inside the bubble strip). When the operator opted
+    # into narration, the audio carries the chat content; we skip burned
+    # captions entirely. Captions still render in the silent path because
+    # there's no audio to follow.
     captions_path: Path | None = None
-    if tts.words and input.caption_style is not None:
-        captions_path = write_caption_file(
-            words=tts.words,
-            out_path=work_dir / "fake_text_captions.ass",
-            style=input.caption_style,
-            size=size,
-        )
 
     final_path = work_dir / "fake_text.mp4"
     render_prompt_native_final(

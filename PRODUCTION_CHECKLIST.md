@@ -127,6 +127,18 @@ templates as `complete` and writes contact sheets to
 - Both processes need `worker_runtime/` on `sys.path` so the
   `xvideo.prompt_video_runner` SDXL imports resolve (already
   handled in `apps/worker/main.py`).
+- **Both workers MUST be started with `DATABASE_URL` and `REDIS_URL`
+  exported in their environment.** `apps/worker/queue.py` defaults
+  to `postgresql://saas:saas@localhost:5432/saas` if `DATABASE_URL`
+  is unset, which is the right *production* default but silently
+  breaks local SQLite dev: the worker BLPOPs the job, calls
+  `update_artifact`, gets a connection-refused, and the artifact
+  freezes at `status=pending`. Source `./.env` (or a systemd
+  EnvironmentFile) before launching each worker so this never bites
+  in dev or prod. The exports worker also has a defensive
+  failed-status fallback (added 2026-04-29) so future unhandled
+  errors won't leave artifacts stuck — but you still want the env
+  right so renders actually succeed.
 
 ### Web (Next.js)
 
