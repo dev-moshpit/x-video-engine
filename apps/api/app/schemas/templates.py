@@ -32,6 +32,10 @@ from pydantic import BaseModel, ConfigDict, Field
 _CAPTION_LANG_PATTERN = r"^[a-z]{2}(-[A-Z]{2})?$"
 
 
+# Pacing choices match ``apps.worker.render_adapters._motion``.
+PacingChoice = Literal["calm", "medium", "fast", "chaotic", "cinematic"]
+
+
 # ─── Phase 1 input models ───────────────────────────────────────────────
 
 class AIStoryInput(BaseModel):
@@ -42,11 +46,17 @@ class AIStoryInput(BaseModel):
     duration: float = Field(20.0, ge=8.0, le=60.0)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     style: Optional[str] = Field(None, max_length=120)
+    # Visual style preset id — resolved against
+    # ``apps.worker.render_adapters._style_presets``. When set, the
+    # adapter prefixes ``prompt`` with the preset's ``positive_prefix``
+    # before handing the engine a plan request.
+    style_preset: Optional[str] = Field(None, max_length=80)
     seed: Optional[int] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = None
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     music_bed: Optional[str] = Field(None, max_length=500)
+    pacing: Optional[PacingChoice] = None
 
 
 class RedditStoryInput(BaseModel):
@@ -64,6 +74,8 @@ class RedditStoryInput(BaseModel):
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "kinetic_word"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
+    style_preset: Optional[str] = Field(None, max_length=80)
+    pacing: Optional[PacingChoice] = None
 
 
 class VoiceoverInput(BaseModel):
@@ -77,6 +89,7 @@ class VoiceoverInput(BaseModel):
     caption_style: str = "clean_subtitle"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
+    pacing: Optional[PacingChoice] = None
 
 
 class AutoCaptionsInput(BaseModel):
@@ -105,6 +118,7 @@ class AutoCaptionsInput(BaseModel):
     voice_name: Optional[str] = None
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
     background_url: Optional[str] = None
+    pacing: Optional[PacingChoice] = None
 
 
 # ─── Phase 2 input models ───────────────────────────────────────────────
@@ -136,6 +150,7 @@ class FakeTextInput(BaseModel):
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "bold_word"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
+    pacing: Optional[PacingChoice] = None
 
 
 class WouldYouRatherInput(BaseModel):
@@ -159,6 +174,7 @@ class WouldYouRatherInput(BaseModel):
     # stay clean. Operators can opt back in via caption_style.
     caption_style: Optional[str] = None
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
+    pacing: Optional[PacingChoice] = None
 
 
 class SplitVideoInput(BaseModel):
@@ -177,6 +193,7 @@ class SplitVideoInput(BaseModel):
     caption_style: Optional[str] = "bold_word"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
+    pacing: Optional[PacingChoice] = None
 
 
 class TwitterInput(BaseModel):
@@ -199,6 +216,7 @@ class TwitterInput(BaseModel):
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
     background_url: Optional[str] = None
+    pacing: Optional[PacingChoice] = None
 
 
 class TopFiveItem(BaseModel):
@@ -222,6 +240,7 @@ class TopFiveInput(BaseModel):
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "impact_uppercase"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
+    pacing: Optional[PacingChoice] = None
 
 
 class RobloxRantInput(BaseModel):
@@ -236,6 +255,7 @@ class RobloxRantInput(BaseModel):
     voice_name: Optional[str] = None
     caption_style: str = "impact_uppercase"
     caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
+    pacing: Optional[PacingChoice] = None
 
 
 # ─── Registry ───────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ from pathlib import Path
 from xvideo.prompt_native.schema import aspect_to_size
 
 from apps.worker.render_adapters._image_seq import Frame
+from apps.worker.render_adapters._motion import get_pacing
 from apps.worker.render_adapters._overlay import render_overlay_with_voice
 from apps.worker.render_adapters._panels import render_top_five_panel
 from apps.worker.template_inputs import TopFiveInput
@@ -44,6 +45,16 @@ def _build_frames(
     panel_dir = work_dir / "top_five_frames"
     panel_dir.mkdir(parents=True, exist_ok=True)
     n = len(inp.items)
+    # Pacing biases the per-item hold without ignoring the operator's
+    # ``per_item_seconds``: a calm pacing nudges holds longer, fast
+    # shortens them. The caller is still bounded by the schema's 2.0–15.0
+    # range — pacing only scales within it.
+    pacing = get_pacing(inp.pacing) if inp.pacing else None
+    if pacing is not None:
+        scale = pacing.hold_seconds / 3.0  # baseline = 3 s per beat
+        per_item = max(2.0, min(15.0, inp.per_item_seconds * scale))
+    else:
+        per_item = inp.per_item_seconds
     frames: list[Frame] = []
     for idx, item in enumerate(inp.items):
         rank = n - idx
@@ -58,7 +69,7 @@ def _build_frames(
             size=size,
             out_path=path,
         )
-        frames.append(Frame(path, inp.per_item_seconds))
+        frames.append(Frame(path, per_item))
     return frames
 
 
@@ -74,4 +85,6 @@ def render(input: TopFiveInput, work_dir: Path) -> Path:
         size=size,
         work_dir=work_dir,
         base="top_five",
+        background_url=input.background_url,
+        overlay_opacity=0.93,
     )

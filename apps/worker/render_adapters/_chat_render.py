@@ -30,6 +30,8 @@ from typing import Literal
 from PIL import Image, ImageDraw
 
 from apps.worker.render_adapters._font import load_font
+from apps.worker.render_adapters._fonts import draw_text_safe, get_emoji_font, text_length_safe
+from apps.worker.render_adapters._layout import hex_to_rgb as _layout_hex_to_rgb, wrap_to_width
 
 
 Sender = Literal["me", "them"]
@@ -115,26 +117,23 @@ def get_chat_style(style: StyleId, theme: ThemeId) -> ChatStyle:
     return _PALETTE.get((style, theme)) or _PALETTE[("ios", "light")]
 
 
+def _hex_to_rgb(hex_color: str | None, fallback: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Hex parser with a fallback colour when the input is missing/invalid."""
+    if not hex_color:
+        return fallback
+    try:
+        return _layout_hex_to_rgb(hex_color)
+    except (ValueError, IndexError):
+        return fallback
+
+
 # ─── Layout primitives ──────────────────────────────────────────────────
 
 def _wrap_text(
     text: str, font, max_width: int, draw: ImageDraw.ImageDraw,
 ) -> list[str]:
-    """Greedy word-wrap honoring ``max_width`` in pixels."""
-    words = text.split()
-    if not words:
-        return [""]
-    lines: list[str] = []
-    cur = words[0]
-    for w in words[1:]:
-        candidate = f"{cur} {w}"
-        if draw.textlength(candidate, font=font) <= max_width:
-            cur = candidate
-        else:
-            lines.append(cur)
-            cur = w
-    lines.append(cur)
-    return lines
+    """Thin wrapper that forwards to the shared layout helper."""
+    return wrap_to_width(text, font=font, max_w=max_width, draw=draw)
 
 
 def _draw_bubble(
@@ -167,6 +166,8 @@ def render_chat_frame(
     typing: Sender | None,
     size: tuple[int, int],
     out_path: Path,
+    background_color: str | None = None,
+    show_timestamps: bool = False,
 ) -> Path:
     """Render one chat screen.
 
@@ -175,10 +176,13 @@ def render_chat_frame(
     most recent messages are pinned to the bottom of the chat area —
     when more messages arrive than fit, the oldest scroll off the top.
     """
-    width, height = size
+    outer_width, outer_height = size
+    panel_margin = max(int(outer_width * 0.055), 18)
+    width = outer_width - panel_margin * 2
+    height = outer_height - panel_margin * 2
     palette = get_chat_style(style, theme)
 
-    img = Image.new("RGB", size, color=palette.bg)
+    img = Image.new("RGB", (width, height), color=palette.bg)
     draw = ImageDraw.Draw(img)
 
     # Sizing — scaled relative to width so 9:16 (576×1024) and 1:1
@@ -187,6 +191,8 @@ def render_chat_frame(
     header_h = int(86 * scale)
     msg_font = load_font(int(28 * scale))
     title_font = load_font(int(30 * scale), bold=True)
+    msg_emoji = get_emoji_font(int(28 * scale))
+    title_emoji = get_emoji_font(int(30 * scale))
     bubble_radius = int(22 * scale)
     bubble_pad_x = int(18 * scale)
     bubble_pad_y = int(12 * scale)
@@ -198,11 +204,32 @@ def render_chat_frame(
 
     # Header bar.
     draw.rectangle((0, 0, width, header_h), fill=palette.header_bg)
-    title_w = draw.textlength(chat_title, font=title_font)
+    avatar_size = int(42 * scale)
+    avatar_x = edge_margin
+    avatar_y = header_h // 2 - avatar_size // 2
+    draw.ellipse(
+        (avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size),
+        fill=palette.me_bubble,
+    )
+    initial = (chat_title[:1] or "?").upper()
+    init_font = load_font(int(22 * scale), bold=True)
+    init_w = draw.textlength(initial, font=init_font)
     draw.text(
-        ((width - title_w) // 2, header_h // 2 - line_h // 2),
+        (avatar_x + (avatar_size - init_w) // 2, avatar_y + int(7 * scale)),
+        initial,
+        font=init_font,
+        fill=palette.me_fg,
+    )
+    # Header title — glyph-aware so emoji in chat_title (eg "🔥 Sam")
+    # don't render as .notdef boxes when the host's bold-Arial face
+    # doesn't carry the codepoint.
+    title_w = text_length_safe(draw, chat_title, primary=title_font, emoji=title_emoji)
+    draw_text_safe(
+        draw,
+        ((width - int(title_w)) // 2, header_h // 2 - line_h // 2),
         chat_title,
-        font=title_font,
+        primary=title_font,
+        emoji=title_emoji,
         fill=palette.header_fg,
     )
     # Subtle divider under header.
@@ -240,11 +267,26 @@ def render_chat_frame(
     # Anchor stack to bottom of chat area.
     y = chat_bottom - total_h + gap_between
 
-    for sender, _text, h, lines in measured:
-        bubble_w = (
-            max(int(draw.textlength(line, font=msg_font)) for line in lines)
-            + bubble_pad_x * 2
+    if show_timestamps and (measured or typing is not None):
+        stamp = "Today 9:41 PM"
+        stamp_font = load_font(int(16 * scale))
+        sw = draw.textlength(stamp, font=stamp_font)
+        stamp_y = max(chat_top, y - int(26 * scale))
+        draw.text(
+            ((width - sw) // 2, stamp_y),
+            stamp,
+            font=stamp_font,
+            fill=palette.typing_fg,
         )
+
+    for sender, _text, h, lines in measured:
+        # Measure each line with the glyph-aware helper so bubbles are
+        # wide enough for any emoji that may render in the fallback face.
+        line_widths = [
+            text_length_safe(draw, line, primary=msg_font, emoji=msg_emoji)
+            for line in lines
+        ]
+        bubble_w = int(max(line_widths or [0])) + bubble_pad_x * 2
         bubble_w = min(bubble_w, max_bubble_w)
 
         if sender == "me":
@@ -264,7 +306,11 @@ def render_chat_frame(
         ty = y + bubble_pad_y
         for line in lines:
             tx = x_left + bubble_pad_x
-            draw.text((tx, ty), line, font=msg_font, fill=text_fill)
+            draw_text_safe(
+                draw, (tx, ty), line,
+                primary=msg_font, emoji=msg_emoji,
+                fill=text_fill,
+            )
             ty += line_h
         y += h + gap_between
 
@@ -288,6 +334,17 @@ def render_chat_frame(
             dots, font=msg_font, fill=palette.typing_fg,
         )
 
+    outer_bg = _hex_to_rgb(background_color, (17, 24, 39))
+    outer = Image.new("RGB", size, color=outer_bg)
+    mask = Image.new("L", (width, height), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle(
+        (0, 0, width, height),
+        radius=max(int(34 * scale), 22),
+        fill=255,
+    )
+    outer.paste(img, (panel_margin, panel_margin), mask)
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out_path, format="PNG")
+    outer.save(out_path, format="PNG")
     return out_path

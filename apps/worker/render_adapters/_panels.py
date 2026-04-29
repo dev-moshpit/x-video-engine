@@ -91,39 +91,55 @@ def render_wyr_panel(
     """
     width, height = size
     scale = width / 480.0
+    safe = safe_zone_for(size, "wyr")
     img = Image.new("RGB", size, color=(15, 15, 18))
     draw = ImageDraw.Draw(img)
 
     pad = int(28 * scale)
-    title_font = load_font(int(36 * scale), bold=True)
     opt_font = load_font(int(40 * scale), bold=True)
     timer_font = load_font(int(48 * scale), bold=True)
     pct_font = load_font(int(56 * scale), bold=True)
-    line_h_title = int(44 * scale)
     line_h_opt = int(48 * scale)
 
     title_h = int(160 * scale)
     timer_h = int(70 * scale)
     panel_h = (height - title_h - timer_h - pad * 2) // 2
 
-    # Title block.
-    _draw_centered(
-        draw,
-        text=question,
-        font=title_font,
-        bbox=(pad, pad, width - pad, pad + title_h),
-        fill=(245, 245, 245),
-        line_h=line_h_title,
+    # Question — auto-fits down from 38px so very long questions stay
+    # legible without overflowing the title block.
+    title_font, title_lines, line_h_title = auto_fit_text(
+        question,
+        draw=draw,
+        font_factory=lambda px: load_font(px, bold=True),
+        start_size=int(38 * scale),
+        min_size=int(20 * scale),
+        max_w=width - pad * 2,
+        max_h=title_h - pad,
+        max_lines=4,
     )
+    title_block_h = len(title_lines) * line_h_title
+    title_y = pad + max(0, (title_h - title_block_h) // 2)
+    for line in title_lines:
+        lw = draw.textlength(line, font=title_font)
+        draw.text((pad + ((width - pad * 2) - lw) // 2, title_y),
+                  line, font=title_font, fill=(245, 245, 245))
+        title_y += line_h_title
 
-    # Panel A.
+    # Panel A — option-A bubble with a soft drop-shadow so the card lifts
+    # off the deep background.
     a_bg = _hex_to_rgb(color_a)
     a_fg = _readable_fg(a_bg)
     a_top = pad + title_h
-    draw.rounded_rectangle(
-        (pad, a_top, width - pad, a_top + panel_h),
-        radius=int(28 * scale), fill=a_bg,
+    rounded_card(
+        img,
+        bbox=(pad, a_top, width - pad, a_top + panel_h),
+        fill=a_bg,
+        radius=int(28 * scale),
+        shadow=True,
+        shadow_offset=(0, int(8 * scale)),
+        shadow_blur=int(16 * scale),
     )
+    draw = ImageDraw.Draw(img)
     _draw_centered(
         draw,
         text=option_a,
@@ -151,14 +167,20 @@ def render_wyr_panel(
         line_h=int(60 * scale),
     )
 
-    # Panel B.
+    # Panel B — same shadow treatment as panel A.
     b_bg = _hex_to_rgb(color_b)
     b_fg = _readable_fg(b_bg)
     b_top = timer_top + timer_h
-    draw.rounded_rectangle(
-        (pad, b_top, width - pad, b_top + panel_h),
-        radius=int(28 * scale), fill=b_bg,
+    rounded_card(
+        img,
+        bbox=(pad, b_top, width - pad, b_top + panel_h),
+        fill=b_bg,
+        radius=int(28 * scale),
+        shadow=True,
+        shadow_offset=(0, int(8 * scale)),
+        shadow_blur=int(16 * scale),
     )
+    draw = ImageDraw.Draw(img)
     _draw_centered(
         draw,
         text=option_b,

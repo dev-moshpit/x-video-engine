@@ -13,7 +13,8 @@ from pathlib import Path
 
 from xvideo.prompt_native.schema import aspect_to_size
 
-from apps.worker.render_adapters._common import render_script_with_solid_bg
+from apps.worker.render_adapters._captions import write_caption_file
+from apps.worker.render_adapters._common import render_script_with_background
 from apps.worker.render_adapters._video_input import resolve_video_input
 from apps.worker.template_inputs import RobloxRantInput
 
@@ -23,7 +24,6 @@ import subprocess
 import imageio_ffmpeg
 
 from xvideo.post.tts import synthesize, voice_for_pack
-from xvideo.post.word_captions import build_ass
 from xvideo.post.prompt_video_stitcher import render_prompt_native_final
 
 
@@ -64,21 +64,45 @@ def _scaled_bg(
     return out_path
 
 
+def _pacing_speech_rate(pacing: str | None, fallback: str) -> str:
+    """Bias the TTS speech rate by pacing preset.
+
+    The schema clamps to ``[+\\-]\\d{1,3}%`` so we always emit a
+    well-formed value. ``fallback`` is whatever the operator set on
+    the form (default ``+15%``); pacing only over-rides the rate when
+    the operator left it at that default.
+    """
+    if pacing is None or fallback != "+15%":
+        return fallback
+    return {
+        "calm":      "+0%",
+        "medium":    "+10%",
+        "fast":      "+20%",
+        "chaotic":   "+30%",
+        "cinematic": "+5%",
+    }.get(pacing, fallback)
+
+
 def render(input: RobloxRantInput, work_dir: Path) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
     size = aspect_to_size(input.aspect)
 
     bg_upload = resolve_video_input(input.background_url, work_dir)
+    speech_rate = _pacing_speech_rate(input.pacing, input.speech_rate)
 
     # No background video uploaded — same path as voiceover/auto_captions.
     if bg_upload is None:
-        return render_script_with_solid_bg(
+        return render_script_with_background(
             script=input.script,
             voice_name=input.voice_name,
             aspect=input.aspect,
             background_color=input.background_color,
+            background_url=input.background_url,
+            caption_style=input.caption_style,
+            speech_rate=speech_rate,
             work_dir=work_dir,
             base="roblox_rant",
+            default_caption_style="impact_uppercase",
         )
 
     # Voiced + uploaded-bg path.
@@ -88,18 +112,18 @@ def render(input: RobloxRantInput, work_dir: Path) -> Path:
         text=input.script,
         out_path=voice_path,
         voice=chosen_voice,
-        rate=input.speech_rate,
+        rate=speech_rate,
         want_words=True,
     )
 
     captions_path: Path | None = None
     if tts.words:
-        captions_path = work_dir / "roblox_rant_captions.ass"
-        build_ass(
+        captions_path = write_caption_file(
             words=tts.words,
-            out_path=captions_path,
-            video_width=size[0],
-            video_height=size[1],
+            out_path=work_dir / "roblox_rant_captions.ass",
+            style=input.caption_style,
+            size=size,
+            default_style="impact_uppercase",
         )
 
     bg_path = _scaled_bg(
