@@ -7,6 +7,10 @@ of these (with per-beat durations) and feed it to
 Kept in one module so the visual language stays consistent across the
 viral templates (rounded corners, padding scale, headline weights) —
 when the design changes, it changes once here.
+
+Layout primitives (auto-fit, rounded card with shadow, safe-zone
+helpers) live in :mod:`apps.worker.render_adapters._layout` so they
+can be reused by future template renderers without copy/paste.
 """
 
 from __future__ import annotations
@@ -18,35 +22,36 @@ from PIL import Image, ImageDraw
 
 from apps.worker.render_adapters._context import get_brand_color
 from apps.worker.render_adapters._font import load_font
+from apps.worker.render_adapters._fonts import (
+    draw_text_safe,
+    get_emoji_font,
+    has_emoji_font,
+    text_length_safe,
+)
+from apps.worker.render_adapters._layout import (
+    auto_fit_text,
+    draw_centered_in_bbox,
+    hex_to_rgb,
+    readable_fg,
+    rounded_card,
+    safe_zone_for,
+    shade,
+    text_with_outline,
+    wrap_to_width,
+)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    h = hex_color.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    """Backwards-compatible alias kept for external callers."""
+    return hex_to_rgb(hex_color)
 
 
 def _readable_fg(bg: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Pick black or white text for a given bg by luminance."""
-    r, g, b = bg
-    lum = 0.299 * r + 0.587 * g + 0.114 * b
-    return (20, 20, 20) if lum > 160 else (255, 255, 255)
+    return readable_fg(bg)
 
 
 def _wrap(text: str, font, max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
-    words = text.split()
-    if not words:
-        return [""]
-    out: list[str] = []
-    cur = words[0]
-    for w in words[1:]:
-        cand = f"{cur} {w}"
-        if draw.textlength(cand, font=font) <= max_w:
-            cur = cand
-        else:
-            out.append(cur)
-            cur = w
-    out.append(cur)
-    return out
+    return wrap_to_width(text, font=font, max_w=max_w, draw=draw)
 
 
 def _draw_centered(
@@ -58,14 +63,9 @@ def _draw_centered(
     fill: tuple[int, int, int],
     line_h: int,
 ) -> None:
-    x0, y0, x1, y1 = bbox
-    lines = _wrap(text, font, x1 - x0, draw)
-    block_h = len(lines) * line_h
-    y = y0 + ((y1 - y0) - block_h) // 2
-    for line in lines:
-        w = draw.textlength(line, font=font)
-        draw.text((x0 + ((x1 - x0) - w) // 2, y), line, font=font, fill=fill)
-        y += line_h
+    draw_centered_in_bbox(
+        draw, text=text, font=font, bbox=bbox, fill=fill, line_h=line_h,
+    )
 
 
 # ─── Would You Rather ───────────────────────────────────────────────────
@@ -208,6 +208,7 @@ def render_tweet_card(
     """Render a tweet card centered over a solid background."""
     width, height = size
     scale = width / 480.0
+    safe = safe_zone_for(size, "twitter")
     # Phase 6 brand kit:
     #   - page bg uses accent_color when set, else the per-call value
     #   - the verified-check accent + avatar circle use brand_color
@@ -235,6 +236,7 @@ def render_tweet_card(
     handle_font = load_font(int(24 * scale))
     text_font = load_font(int(32 * scale))
     meta_font = load_font(int(18 * scale), bold=True)
+    emoji_font = get_emoji_font(int(18 * scale))
 
     # Wrap tweet text once for height calc.
     text_box_w = card_w - card_pad * 2
@@ -246,11 +248,23 @@ def render_tweet_card(
     metrics_h = int(60 * scale)
     card_h = card_pad + header_h + card_pad // 2 + text_h + card_pad + metrics_h
 
-    card_y = (height - card_h) // 2
-    draw.rounded_rectangle(
-        (card_x, card_y, card_x + card_w, card_y + card_h),
-        radius=int(20 * scale), fill=card_bg,
+    # Center the card vertically within the safe zone (between status
+    # bar reserve and burned caption reserve) so it never collides
+    # with the caption strip.
+    card_y = safe.safe_top + max(0, (safe.safe_height - card_h) // 2)
+    rounded_card(
+        img,
+        bbox=(card_x, card_y, card_x + card_w, card_y + card_h),
+        fill=card_bg,
+        radius=int(20 * scale),
+        shadow=True,
+        shadow_offset=(0, int(10 * scale)),
+        shadow_blur=int(22 * scale),
     )
+    # rounded_card pastes its shadow composite back via ``Image.paste``
+    # which can break the existing ImageDraw binding on the original
+    # buffer; rebind so subsequent draw calls land on the same image.
+    draw = ImageDraw.Draw(img)
 
     # Avatar circle (placeholder — accent ring + initial).
     avatar_size = int(70 * scale)
@@ -321,9 +335,15 @@ def render_tweet_card(
     ]
     cell_w = (card_w - card_pad * 2) // 4
     for i, p in enumerate(parts):
-        draw.text(
-            (card_x + card_pad + i * cell_w, metrics_y),
-            p, font=meta_font, fill=meta_fg,
+        # Glyph-aware text — the emoji fallback only kicks in for runs
+        # the primary face is missing (♥ is in Arial Bold so the
+        # current label set never triggers it; future labels with real
+        # emoji will route automatically).
+        x = card_x + card_pad + i * cell_w
+        draw_text_safe(
+            draw, (x, metrics_y), p,
+            primary=meta_font, emoji=emoji_font,
+            fill=meta_fg,
         )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -354,6 +374,7 @@ def render_top_five_panel(
     """
     width, height = size
     scale = width / 480.0
+    safe = safe_zone_for(size, "top_five")
     bg = _hex_to_rgb(get_brand_color("accent_color", background_color))
     fg = _readable_fg(bg)
     accent = _hex_to_rgb(get_brand_color("brand_color", "#ffc400"))
@@ -362,17 +383,27 @@ def render_top_five_panel(
     draw = ImageDraw.Draw(img)
 
     pad = int(36 * scale)
-    title_font = load_font(int(28 * scale), bold=True)
     rank_font = load_font(int(220 * scale), bold=True)
     item_font = load_font(int(46 * scale), bold=True)
     desc_font = load_font(int(28 * scale))
 
-    # Header — list title (small, top). Wrap if it overflows the frame
-    # so long titles like "Top 3 productivity hacks that actually work"
-    # don't get clipped on the right edge.
-    title_lines = _wrap(list_title.upper(), title_font, width - pad * 2, draw)
-    title_line_h = int(34 * scale)
-    title_y = pad
+    # Header — list title (small, top). Auto-fit shrinks the font in
+    # 2-px steps and wraps to up to two lines so long titles like
+    # "Top 3 productivity hacks that actually work" aren't clipped at
+    # the right edge.
+    title_y = max(pad, safe.safe_top)
+    title_max_h = int(80 * scale)
+    title_font, title_lines, title_line_h = auto_fit_text(
+        list_title.upper(),
+        draw=draw,
+        font_factory=lambda px: load_font(px, bold=True),
+        start_size=int(30 * scale),
+        min_size=int(18 * scale),
+        max_w=width - pad * 2,
+        max_h=title_max_h,
+        max_lines=2,
+        line_height_ratio=1.18,
+    )
     for line in title_lines:
         draw.text((pad, title_y), line, font=title_font, fill=accent)
         title_y += title_line_h

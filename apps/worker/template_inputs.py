@@ -16,6 +16,15 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# Shared field. ``caption_language`` is a BCP-47-ish hint ("en", "es",
+# "ar"…) the operator selects in the create form. The worker uses it
+# to (a) pick a voice with matching language tag when ``voice_name``
+# isn't pinned and (b) tag the burned ASS captions for downstream
+# translation hooks. Pure plumbing for now — translation provider
+# wires in later without schema changes.
+_CAPTION_LANG_PATTERN = r"^[a-z]{2}(-[A-Z]{2})?$"
+
+
 # ─── Phase 1 ────────────────────────────────────────────────────────────
 
 class AIStoryInput(BaseModel):
@@ -29,6 +38,7 @@ class AIStoryInput(BaseModel):
     seed: Optional[int] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = None
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     music_bed: Optional[str] = Field(None, max_length=500)
 
 
@@ -46,6 +56,7 @@ class RedditStoryInput(BaseModel):
     seed: Optional[int] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "kinetic_word"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
 
 
 class VoiceoverInput(BaseModel):
@@ -57,6 +68,7 @@ class VoiceoverInput(BaseModel):
     background_url: Optional[str] = None
     voice_name: Optional[str] = None
     caption_style: str = "clean_subtitle"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
 
 
@@ -77,7 +89,11 @@ class AutoCaptionsInput(BaseModel):
     audio_url: Optional[str] = None
     video_url: Optional[str] = None
     caption_style: str = "bold_word"
+    # Whisper transcription language (pre-existing). caption_language is
+    # the rendered caption language hint and may differ from the
+    # transcription language once translation hooks land.
     language: str = Field("en", min_length=2, max_length=8)
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
@@ -112,6 +128,7 @@ class FakeTextInput(BaseModel):
     narrate: bool = False
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "bold_word"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
 
 
 class WouldYouRatherInput(BaseModel):
@@ -134,6 +151,7 @@ class WouldYouRatherInput(BaseModel):
     # and the bottom panel header — default to no captions so panels
     # stay clean. Operators can opt back in via caption_style.
     caption_style: Optional[str] = None
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
 
 
 class SplitVideoInput(BaseModel):
@@ -150,6 +168,7 @@ class SplitVideoInput(BaseModel):
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "bold_word"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
 
 
@@ -170,6 +189,7 @@ class TwitterInput(BaseModel):
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "bold_word"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
     background_url: Optional[str] = None
 
@@ -194,6 +214,7 @@ class TopFiveInput(BaseModel):
     background_url: Optional[str] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "impact_uppercase"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
 
 
 class RobloxRantInput(BaseModel):
@@ -207,3 +228,4 @@ class RobloxRantInput(BaseModel):
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
     caption_style: str = "impact_uppercase"
+    caption_language: Optional[str] = Field(None, pattern=_CAPTION_LANG_PATTERN)
