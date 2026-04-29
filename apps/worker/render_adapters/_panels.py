@@ -234,7 +234,7 @@ def render_tweet_card(
     name_font = load_font(int(28 * scale), bold=True)
     handle_font = load_font(int(24 * scale))
     text_font = load_font(int(32 * scale))
-    meta_font = load_font(int(22 * scale), bold=True)
+    meta_font = load_font(int(18 * scale), bold=True)
 
     # Wrap tweet text once for height calc.
     text_box_w = card_w - card_pad * 2
@@ -277,15 +277,24 @@ def render_tweet_card(
         check_x = name_x + int(nw) + int(10 * scale)
         check_y = av_y + int(10 * scale)
         radius = int(14 * scale)
+        cx = check_x + radius
+        cy = check_y + radius
         draw.ellipse(
             (check_x, check_y, check_x + radius * 2, check_y + radius * 2),
             fill=accent,
         )
-        check_font = load_font(int(20 * scale), bold=True)
-        cw = draw.textlength("✓", font=check_font)
-        draw.text(
-            (check_x + radius - cw // 2, check_y + int(2 * scale)),
-            "✓", font=check_font, fill=(255, 255, 255),
+        # Polyline checkmark — Pillow falls back to .notdef for many
+        # Unicode glyphs on Linux workers, so we draw the shape instead
+        # of relying on the system font having ✓.
+        check_w = max(2, int(3 * scale))
+        draw.line(
+            [
+                (cx - radius // 2, cy + radius // 8),
+                (cx - radius // 6, cy + radius // 2),
+                (cx + radius // 2, cy - radius // 3),
+            ],
+            fill=(255, 255, 255),
+            width=check_w,
         )
     handle_y = av_y + int(40 * scale)
     draw.text((name_x, handle_y), f"@{handle}",
@@ -298,13 +307,17 @@ def render_tweet_card(
                   font=text_font, fill=text_fg)
         text_y += line_h
 
-    # Metrics row.
+    # Metrics row. Avoids the 1F4AC/1F501/2764/1F4CA emoji codepoints
+    # because Pillow loads a single TTF and falls back to .notdef for
+    # any glyph the system Arial / Liberation Sans doesn't carry — the
+    # screen would render as four empty boxes on a Linux worker. ♥ is in
+    # the BMP and present in every common system font we fall back to.
     metrics_y = card_y + card_h - metrics_h + int(8 * scale)
     parts = [
-        f"💬 {_format_count(replies)}",
-        f"🔁 {_format_count(retweets)}",
-        f"❤ {_format_count(likes)}",
-        f"📊 {_format_count(views)}",
+        f"{_format_count(replies)} reply",
+        f"{_format_count(retweets)} RT",
+        f"{_format_count(likes)} ♥",
+        f"{_format_count(views)} views",
     ]
     cell_w = (card_w - card_pad * 2) // 4
     for i, p in enumerate(parts):
@@ -354,8 +367,15 @@ def render_top_five_panel(
     item_font = load_font(int(46 * scale), bold=True)
     desc_font = load_font(int(28 * scale))
 
-    # Header — list title (small, top).
-    draw.text((pad, pad), list_title.upper(), font=title_font, fill=accent)
+    # Header — list title (small, top). Wrap if it overflows the frame
+    # so long titles like "Top 3 productivity hacks that actually work"
+    # don't get clipped on the right edge.
+    title_lines = _wrap(list_title.upper(), title_font, width - pad * 2, draw)
+    title_line_h = int(34 * scale)
+    title_y = pad
+    for line in title_lines:
+        draw.text((pad, title_y), line, font=title_font, fill=accent)
+        title_y += title_line_h
 
     # Big rank number ("#3", "#2", "#1") centered slightly above midline.
     rank_text = f"#{rank}"

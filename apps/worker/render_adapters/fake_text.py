@@ -33,14 +33,20 @@ from pathlib import Path
 import imageio_ffmpeg
 
 from xvideo.post.tts import synthesize, voice_for_pack
-from xvideo.post.word_captions import build_ass
 from xvideo.post.prompt_video_stitcher import render_prompt_native_final
 from xvideo.prompt_native.schema import aspect_to_size
 
+from apps.worker.render_adapters._captions import write_caption_file
 from apps.worker.render_adapters._chat_render import render_chat_frame
+from apps.worker.render_adapters._common import (
+    blend_video_overlay,
+    make_media_background,
+)
 from apps.worker.render_adapters._image_seq import (
     Frame,
     encode_frame_sequence,
+    stretch_frames_to_duration,
+    total_duration,
 )
 from apps.worker.template_inputs import FakeTextInput, FakeTextMessage
 
@@ -88,6 +94,8 @@ def _build_frame_timeline(
         chat_title=inp.chat_title,
         visible=[], typing=None,
         size=size, out_path=intro_path,
+        background_color=inp.background_color,
+        show_timestamps=inp.show_timestamps,
     )
     frames.append(Frame(intro_path, 0.6))
     frame_idx += 1
@@ -101,6 +109,8 @@ def _build_frame_timeline(
                 visible=visible.copy(),
                 typing=m.sender,
                 size=size, out_path=typing_path,
+                background_color=inp.background_color,
+                show_timestamps=inp.show_timestamps,
             )
             frames.append(Frame(typing_path, m.typing_ms / 1000.0))
             frame_idx += 1
@@ -113,26 +123,14 @@ def _build_frame_timeline(
             visible=visible.copy(),
             typing=None,
             size=size, out_path=reveal_path,
+            background_color=inp.background_color,
+            show_timestamps=inp.show_timestamps,
         )
         hold_sec = max(m.hold_ms, 100) / 1000.0 * reveal_hold_scale
         frames.append(Frame(reveal_path, hold_sec))
         frame_idx += 1
 
     return frames
-
-
-def _organic_duration_sec(messages: list[FakeTextMessage]) -> float:
-    """Compute total seconds without rendering frames.
-
-    Mirrors the beats produced by :func:`_build_frame_timeline` at
-    ``reveal_hold_scale=1.0``: 0.6 s intro + per-message (typing + hold).
-    """
-    total = 0.6
-    for m in messages:
-        if m.typing_ms > 0:
-            total += m.typing_ms / 1000.0
-        total += max(m.hold_ms, 100) / 1000.0
-    return total
 
 
 def _silent_transcode(src: Path, out: Path) -> Path:
@@ -152,6 +150,33 @@ def _silent_transcode(src: Path, out: Path) -> Path:
     return out
 
 
+def _with_optional_background(
+    *,
+    inp: FakeTextInput,
+    overlay_video: Path,
+    duration_sec: float,
+    size: tuple[int, int],
+    work_dir: Path,
+) -> Path:
+    """Blend the chat capture over a selected library background if present."""
+    media_bg = make_media_background(
+        background_url=inp.background_url,
+        duration_sec=duration_sec,
+        size=size,
+        work_dir=work_dir,
+        base="fake_text",
+    )
+    if media_bg is None:
+        return overlay_video
+    return blend_video_overlay(
+        background_video=media_bg,
+        overlay_video=overlay_video,
+        out_path=work_dir / "fake_text_composited_bg.mp4",
+        duration_sec=duration_sec,
+        opacity=0.96,
+    )
+
+
 def render(input: FakeTextInput, work_dir: Path) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
     size = aspect_to_size(input.aspect)
@@ -166,6 +191,13 @@ def render(input: FakeTextInput, work_dir: Path) -> Path:
             out_path=work_dir / "fake_text_chat.mp4",
             size=size,
         )
+        chat_video = _with_optional_background(
+            inp=input,
+            overlay_video=chat_video,
+            duration_sec=total_duration(frames),
+            size=size,
+            work_dir=work_dir,
+        )
         return _silent_transcode(chat_video, work_dir / "fake_text.mp4")
 
     # Voiced path — synth TTS first so we can scale reveal holds to fit.
@@ -179,25 +211,29 @@ def render(input: FakeTextInput, work_dir: Path) -> Path:
         want_words=True,
     )
 
-    organic_dur = _organic_duration_sec(input.messages)
-    target = max(tts.duration_sec + 0.4, organic_dur)
-    scale = max(target / organic_dur, 1.0) if organic_dur > 0 else 1.0
-    frames = _build_frame_timeline(input, size, work_dir,
-                                   reveal_hold_scale=scale)
+    target = tts.duration_sec + 0.4
+    frames = _build_frame_timeline(input, size, work_dir)
+    frames = stretch_frames_to_duration(frames, target)
     chat_video = encode_frame_sequence(
         frames=frames,
         out_path=work_dir / "fake_text_chat.mp4",
         size=size,
     )
+    chat_video = _with_optional_background(
+        inp=input,
+        overlay_video=chat_video,
+        duration_sec=max(target, total_duration(frames)),
+        size=size,
+        work_dir=work_dir,
+    )
 
     captions_path: Path | None = None
     if tts.words and input.caption_style is not None:
-        captions_path = work_dir / "fake_text_captions.ass"
-        build_ass(
+        captions_path = write_caption_file(
             words=tts.words,
-            out_path=captions_path,
-            video_width=size[0],
-            video_height=size[1],
+            out_path=work_dir / "fake_text_captions.ass",
+            style=input.caption_style,
+            size=size,
         )
 
     final_path = work_dir / "fake_text.mp4"

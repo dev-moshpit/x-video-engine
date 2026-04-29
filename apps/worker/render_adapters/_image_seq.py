@@ -90,3 +90,22 @@ def encode_frame_sequence(
 
 def total_duration(frames: list[Frame]) -> float:
     return sum(max(f.duration_sec, 0.04) for f in frames)
+
+
+def stretch_frames_to_duration(
+    frames: list[Frame], target_sec: float,
+) -> list[Frame]:
+    """Scale every frame's hold uniformly so the timeline covers ``target_sec``.
+
+    Returns ``frames`` untouched when the timeline already covers the
+    target — visual pacing is preserved whenever possible. When the
+    narration outlasts the natural beat plan we stretch every beat by
+    the same factor so the panels keep the same relative weight.
+    """
+    if not frames or target_sec <= 0:
+        return frames
+    current = total_duration(frames)
+    if current <= 0 or current >= target_sec:
+        return frames
+    scale = target_sec / current
+    return [Frame(f.image, max(f.duration_sec, 0.04) * scale) for f in frames]

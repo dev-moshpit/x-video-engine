@@ -34,6 +34,12 @@ from time import monotonic
 # and apps.worker.* without a custom PYTHONPATH at process start.
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_PROJECT_ROOT))
+# ``xvideo.prompt_video_runner`` imports ``sdxl_parallax.*`` directly
+# (not as ``worker_runtime.sdxl_parallax``) — same wiring as
+# ``scripts/generate_prompt_video.py``. Add ``worker_runtime/`` so the
+# ai_story / reddit_story adapters can resolve those imports without
+# touching xvideo/.
+sys.path.insert(0, str(_PROJECT_ROOT / "worker_runtime"))
 
 from apps.worker.queue import (  # noqa: E402
     consume_one,

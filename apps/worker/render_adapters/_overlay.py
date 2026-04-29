@@ -20,12 +20,18 @@ from pathlib import Path
 from typing import Optional
 
 from xvideo.post.tts import synthesize, voice_for_pack
-from xvideo.post.word_captions import build_ass
 from xvideo.post.prompt_video_stitcher import render_prompt_native_final
 
+from apps.worker.render_adapters._captions import write_caption_file
+from apps.worker.render_adapters._common import (
+    blend_video_overlay,
+    make_media_background,
+)
 from apps.worker.render_adapters._image_seq import (
     Frame,
     encode_frame_sequence,
+    stretch_frames_to_duration,
+    total_duration,
 )
 
 
@@ -42,6 +48,8 @@ def render_overlay_with_voice(
     work_dir: Path,
     base: str,
     speech_rate: str = "+0%",
+    background_url: Optional[str] = None,
+    overlay_opacity: float = 0.94,
 ) -> Path:
     """Encode ``frames`` → mp4, synth TTS for ``script``, mux into final.
 
@@ -50,12 +58,12 @@ def render_overlay_with_voice(
     same work_dir without colliding.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
-    bg_video = encode_frame_sequence(
-        frames=frames,
-        out_path=work_dir / f"{base}_bg.mp4",
-        size=size,
-    )
 
+    # Synthesize TTS first so we can stretch the visual timeline to cover
+    # the narration. Without this, narration that runs longer than the
+    # natural panel pacing leaves the final mp4 with audio playing over a
+    # frozen / cut visual track (caught in QA — top_five 9s frames vs
+    # 22.4s narration).
     voice_path = work_dir / f"{base}_voice.mp3"
     chosen_voice = voice_name or voice_for_pack(None)
     tts = synthesize(
@@ -66,14 +74,40 @@ def render_overlay_with_voice(
         want_words=True,
     )
 
+    visual_target = tts.duration_sec + 0.4
+    frames = stretch_frames_to_duration(frames, visual_target)
+
+    overlay_video = encode_frame_sequence(
+        frames=frames,
+        out_path=work_dir / f"{base}_bg.mp4",
+        size=size,
+    )
+
     captions_path: Optional[Path] = None
     if tts.words and caption_style is not None:
-        captions_path = work_dir / f"{base}_captions.ass"
-        build_ass(
+        captions_path = write_caption_file(
             words=tts.words,
-            out_path=captions_path,
-            video_width=size[0],
-            video_height=size[1],
+            out_path=work_dir / f"{base}_captions.ass",
+            style=caption_style,
+            size=size,
+        )
+
+    target_duration = max(visual_target, total_duration(frames))
+    bg_video = overlay_video
+    media_bg = make_media_background(
+        background_url=background_url,
+        duration_sec=target_duration,
+        size=size,
+        work_dir=work_dir,
+        base=base,
+    )
+    if media_bg is not None:
+        bg_video = blend_video_overlay(
+            background_video=media_bg,
+            overlay_video=overlay_video,
+            out_path=work_dir / f"{base}_composited_bg.mp4",
+            duration_sec=target_duration,
+            opacity=overlay_opacity,
         )
 
     final_path = work_dir / f"{base}.mp4"

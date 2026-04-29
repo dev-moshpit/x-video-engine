@@ -29,6 +29,7 @@ class AIStoryInput(BaseModel):
     seed: Optional[int] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = None
+    music_bed: Optional[str] = Field(None, max_length=500)
 
 
 class RedditStoryInput(BaseModel):
@@ -38,6 +39,9 @@ class RedditStoryInput(BaseModel):
     subreddit: str = Field(..., min_length=1, max_length=80)
     title: str = Field(..., min_length=1, max_length=300)
     body: str = Field(..., min_length=10, max_length=8000)
+    username: Optional[str] = Field(None, max_length=80)
+    upvotes: int = Field(1200, ge=0)
+    comments: int = Field(180, ge=0)
     duration: float = Field(30.0, ge=8.0, le=90.0)
     seed: Optional[int] = None
     voice_name: Optional[str] = None
@@ -52,7 +56,7 @@ class VoiceoverInput(BaseModel):
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
     background_url: Optional[str] = None
     voice_name: Optional[str] = None
-    caption_style: str = "bold_word"
+    caption_style: str = "clean_subtitle"
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
 
 
@@ -100,6 +104,10 @@ class FakeTextInput(BaseModel):
     theme: Literal["light", "dark"] = "light"
     chat_title: str = Field("Messages", min_length=1, max_length=80)
     messages: list[FakeTextMessage] = Field(..., min_length=1, max_length=40)
+    background_color: str = Field("#111827", pattern=r"^#[0-9a-fA-F]{6}$")
+    background_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    show_timestamps: bool = False
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     narrate: bool = False
     voice_name: Optional[str] = None
@@ -115,11 +123,17 @@ class WouldYouRatherInput(BaseModel):
     option_b: str = Field(..., min_length=1, max_length=200)
     color_a: str = Field("#1f6feb", pattern=r"^#[0-9a-fA-F]{6}$")
     color_b: str = Field("#dc2626", pattern=r"^#[0-9a-fA-F]{6}$")
+    background_url: Optional[str] = None
     timer_seconds: int = Field(5, ge=3, le=15)
     reveal_percent_a: int = Field(50, ge=0, le=100)
+    seed: Optional[int] = None
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     voice_name: Optional[str] = None
-    caption_style: Optional[str] = "impact_uppercase"
+    # WYR already burns question + both options + a timer on screen.
+    # impact_uppercase captions previously rendered on top of the timer
+    # and the bottom panel header — default to no captions so panels
+    # stay clean. Operators can opt back in via caption_style.
+    caption_style: Optional[str] = None
 
 
 class SplitVideoInput(BaseModel):
@@ -127,6 +141,8 @@ class SplitVideoInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     layout: Literal["vertical", "horizontal"] = "vertical"
+    main_position: Literal["first", "second"] = "first"
+    crop_mode: Literal["cover", "contain"] = "cover"
     main_url: Optional[str] = None
     filler_url: Optional[str] = None
     script: str = Field(..., min_length=10, max_length=8000)
@@ -155,6 +171,7 @@ class TwitterInput(BaseModel):
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "bold_word"
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
+    background_url: Optional[str] = None
 
 
 class TopFiveItem(BaseModel):
@@ -174,6 +191,7 @@ class TopFiveInput(BaseModel):
     per_item_seconds: float = Field(4.0, ge=2.0, le=15.0)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     background_color: str = Field("#0b0b0f", pattern=r"^#[0-9a-fA-F]{6}$")
+    background_url: Optional[str] = None
     voice_name: Optional[str] = None
     caption_style: Optional[str] = "impact_uppercase"
 
