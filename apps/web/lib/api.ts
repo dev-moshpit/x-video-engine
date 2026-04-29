@@ -23,7 +23,52 @@ export interface VoiceInfo {
   name: string;
   gender: "female" | "male" | "neutral";
   language: string;
+  category?: string;
+  tone?: string[];
+  provider?: string;
   is_default?: boolean;
+  preview_url?: string | null;
+}
+
+export interface VoiceCategory {
+  id: string;
+  label: string;
+  voice_ids: string[];
+}
+
+export interface CaptionLanguage {
+  code: string;
+  name: string;
+  native: string;
+  rtl?: boolean;
+}
+
+export interface StylePresetMeta {
+  id: string;
+  name: string;
+  description: string;
+  palette: {
+    background: string;
+    surface: string;
+    primary: string;
+    text_strong: string;
+    text_muted: string;
+  };
+  camera_motion: string;
+  default_caption_style: string;
+  music_mood: string;
+  render_notes: string;
+  tags: string[];
+}
+
+export interface PacingMeta {
+  id: string;
+  label: string;
+  zoom_start: number;
+  zoom_end: number;
+  pan_amount: number;
+  hold_seconds: number;
+  transition_seconds: number;
 }
 
 export interface CaptionStyleInfo {
@@ -226,8 +271,16 @@ async function apiFetch<T>(
 
 export const listTemplates = () => apiFetch<TemplateMeta[]>("/api/templates");
 export const listVoices = () => apiFetch<VoiceInfo[]>("/api/voices");
+export const listVoiceCategories = () =>
+  apiFetch<VoiceCategory[]>("/api/voices/categories");
 export const listCaptionStyles = () =>
   apiFetch<CaptionStyleInfo[]>("/api/caption-styles");
+export const listCaptionLanguages = () =>
+  apiFetch<CaptionLanguage[]>("/api/caption-languages");
+export const listStylePresets = () =>
+  apiFetch<StylePresetMeta[]>("/api/styles");
+export const listPacingPresets = () =>
+  apiFetch<PacingMeta[]>("/api/pacing");
 
 // ─── Authed ─────────────────────────────────────────────────────────────
 
@@ -425,6 +478,180 @@ export const createPortal = (
   token: string,
 ) =>
   apiFetch<{ url: string }>("/api/billing/portal", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+// ─── Phase 8: smart generate ────────────────────────────────────────────
+
+export interface SmartGenerateResponse {
+  plans: GeneratedPlan[];
+  best_index: number;
+  best_plan: GeneratedPlan;
+  reasoning: string[];
+  boosted_score: number;
+  rendered: RenderSummary[];
+}
+
+export const smartGenerate = (
+  projectId: string,
+  body: { candidates?: number; render_top?: number; seed?: number | null },
+  token: string,
+) =>
+  apiFetch<SmartGenerateResponse>(
+    `/api/projects/${projectId}/generate-smart`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    },
+  );
+
+// ─── Phase 9: saved prompts ─────────────────────────────────────────────
+
+export interface SavedPrompt {
+  id: string;
+  user_id: string;
+  template: string;
+  label: string;
+  template_input: Record<string, unknown>;
+  use_count: number;
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const listSavedPrompts = (token: string) =>
+  apiFetch<SavedPrompt[]>("/api/me/saved-prompts", { token });
+
+export const createSavedPrompt = (
+  body: { template: string; label: string; template_input: Record<string, unknown> },
+  token: string,
+) =>
+  apiFetch<SavedPrompt>("/api/me/saved-prompts", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const useSavedPrompt = (
+  id: string,
+  body: { name?: string },
+  token: string,
+) =>
+  apiFetch<Project>(`/api/me/saved-prompts/${id}/use`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const updateSavedPrompt = (
+  id: string,
+  body: { label?: string; template_input?: Record<string, unknown> },
+  token: string,
+) =>
+  apiFetch<SavedPrompt>(`/api/me/saved-prompts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const deleteSavedPrompt = (id: string, token: string) =>
+  apiFetch<void>(`/api/me/saved-prompts/${id}`, {
+    method: "DELETE",
+    token,
+  });
+
+// ─── Phase 9: dashboard insights ────────────────────────────────────────
+
+export interface TemplatePerformance {
+  template: string;
+  template_name: string;
+  starred: number;
+  rejected: number;
+  star_rate: number;
+  renders: number;
+}
+
+export interface InsightSuggestion {
+  template: string;
+  label: string;
+  prompt: string | null;
+  reason: string;
+}
+
+export interface InsightsResponse {
+  is_new_user: boolean;
+  total_renders: number;
+  renders_last_7_days: number;
+  completed_renders: number;
+  starred_renders: number;
+  best_template: TemplatePerformance | null;
+  suggestions: InsightSuggestion[];
+  last_active_template: string | null;
+  last_active_at: string | null;
+}
+
+export const getInsights = (token: string) =>
+  apiFetch<InsightsResponse>("/api/me/insights", { token });
+
+// ─── Phase 13: share preview links ──────────────────────────────────────
+
+export interface RenderShare {
+  id: string;
+  render_id: string;
+  token: string;
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export const getRenderShare = (jobId: string, token: string) =>
+  apiFetch<RenderShare>(`/api/renders/${jobId}/share`, { token });
+
+export const createRenderShare = (
+  jobId: string,
+  body: { expires_at?: string | null },
+  token: string,
+) =>
+  apiFetch<RenderShare>(`/api/renders/${jobId}/share`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const deleteRenderShare = (jobId: string, token: string) =>
+  apiFetch<void>(`/api/renders/${jobId}/share`, {
+    method: "DELETE",
+    token,
+  });
+
+// ─── Phase 13.5: export variants ────────────────────────────────────────
+
+export type ExportAspect = "9:16" | "1:1" | "16:9";
+
+export interface RenderArtifact {
+  id: string;
+  render_id: string;
+  kind: string;
+  aspect: string;
+  captions: boolean;
+  url: string | null;
+  status: "pending" | "rendering" | "complete" | "failed";
+  error: string | null;
+  created_at: string;
+}
+
+export const listRenderArtifacts = (jobId: string, token: string) =>
+  apiFetch<RenderArtifact[]>(`/api/renders/${jobId}/artifacts`, { token });
+
+export const createExportVariant = (
+  jobId: string,
+  body: { aspect: ExportAspect; captions: boolean },
+  token: string,
+) =>
+  apiFetch<RenderArtifact>(`/api/renders/${jobId}/export-variant`, {
     method: "POST",
     body: JSON.stringify(body),
     token,

@@ -14,7 +14,8 @@ import {
 } from "@/lib/api";
 
 
-type Kind = "video" | "image";
+type Kind = "video" | "image" | "audio";
+type Orientation = "any" | "vertical" | "horizontal" | "square";
 
 /** Modal media picker — shown when the user clicks a "Pick" button on a
  * URL field. Two tabs:
@@ -43,6 +44,7 @@ export function MediaPicker({
   const { getToken } = useAuth();
 
   const [tab, setTab] = useState<"saved" | "search">("saved");
+  const [orientation, setOrientation] = useState<Orientation>("any");
   const [saved, setSaved] = useState<MediaAsset[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [savedError, setSavedError] = useState<string | null>(null);
@@ -53,35 +55,58 @@ export function MediaPicker({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searching, startSearch] = useTransition();
 
+  // Audio search isn't wired into Pexels/Pixabay (neither carries
+  // free audio); keep the search tab visible but disable it for audio.
+  const searchSupported = kind !== "audio";
+
   // Hydrate the Saved tab when the picker opens.
   useEffect(() => {
     if (!open) return;
+    if (kind === "audio") {
+      // The media library API only filters image/video by kind. For
+      // audio we currently rely on user uploads from the /library
+      // page; the picker will render an empty state with that hint.
+      setSaved([]);
+      setLoadingSaved(false);
+      return;
+    }
     (async () => {
       setLoadingSaved(true);
       setSavedError(null);
       try {
         const token = await getToken();
         if (!token) throw new Error("not signed in");
-        setSaved(await listMediaAssets(token, { kind }));
+        const filters: { kind?: "video" | "image"; orientation?: Exclude<Orientation, "any"> } = {
+          kind: kind as "video" | "image",
+        };
+        if (orientation !== "any") filters.orientation = orientation;
+        setSaved(await listMediaAssets(token, filters));
       } catch (e) {
         setSavedError(e instanceof Error ? e.message : "load failed");
       } finally {
         setLoadingSaved(false);
       }
     })();
-  }, [open, kind, getToken]);
+  }, [open, kind, orientation, getToken]);
 
   if (!open) return null;
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || !searchSupported) return;
     startSearch(async () => {
       setSearchError(null);
       try {
         const token = await getToken();
         if (!token) throw new Error("not signed in");
-        const res = await searchMedia({ query: query.trim(), kind }, token);
+        const res = await searchMedia(
+          {
+            query: query.trim(),
+            kind: kind as "video" | "image",
+            orientation,
+          },
+          token,
+        );
         setHits(res.hits);
         setWarnings(res.warnings);
       } catch (e) {
@@ -130,17 +155,23 @@ export function MediaPicker({
           </button>
         </div>
 
-        <div className="flex border-b border-zinc-800 px-2">
-          <TabButton
-            active={tab === "saved"}
-            onClick={() => setTab("saved")}
-            label={`Saved (${saved.length})`}
-          />
-          <TabButton
-            active={tab === "search"}
-            onClick={() => setTab("search")}
-            label="Search"
-          />
+        <div className="flex items-center justify-between border-b border-zinc-800 px-2">
+          <div className="flex">
+            <TabButton
+              active={tab === "saved"}
+              onClick={() => setTab("saved")}
+              label={`Saved (${saved.length})`}
+            />
+            <TabButton
+              active={tab === "search"}
+              onClick={() => setTab("search")}
+              label={searchSupported ? "Search" : "Search · n/a"}
+              disabled={!searchSupported}
+            />
+          </div>
+          {kind === "video" || kind === "image" ? (
+            <OrientationFilter value={orientation} onChange={setOrientation} />
+          ) : null}
         </div>
 
         <div className="overflow-y-auto p-4">
@@ -149,6 +180,7 @@ export function MediaPicker({
               loading={loadingSaved}
               error={savedError}
               assets={saved}
+              kind={kind}
               onPick={(url) => {
                 onPick(url);
                 onClose();
@@ -175,16 +207,20 @@ export function MediaPicker({
 
 
 function TabButton({
-  active, onClick, label,
-}: { active: boolean; onClick: () => void; label: string }) {
+  active, onClick, label, disabled = false,
+}: { active: boolean; onClick: () => void; label: string; disabled?: boolean }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      disabled={disabled}
       className={
         "px-4 py-2 text-xs " +
-        (active
-          ? "border-b-2 border-blue-500 text-zinc-100"
-          : "text-zinc-400 hover:text-zinc-200")
+        (disabled
+          ? "cursor-not-allowed text-zinc-600"
+          : active
+            ? "border-b-2 border-blue-500 text-zinc-100"
+            : "text-zinc-400 hover:text-zinc-200")
       }
     >
       {label}
@@ -193,12 +229,47 @@ function TabButton({
 }
 
 
+function OrientationFilter({
+  value, onChange,
+}: {
+  value: Orientation;
+  onChange: (v: Orientation) => void;
+}) {
+  const opts: Array<{ id: Orientation; label: string }> = [
+    { id: "any", label: "any" },
+    { id: "vertical", label: "9:16" },
+    { id: "horizontal", label: "16:9" },
+    { id: "square", label: "1:1" },
+  ];
+  return (
+    <div className="flex gap-1 px-2 py-1.5 text-[10px]">
+      {opts.map((o) => (
+        <button
+          type="button"
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={
+            "rounded-full px-2 py-0.5 " +
+            (value === o.id
+              ? "bg-blue-600 text-white"
+              : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800")
+          }
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
 function SavedTab({
-  loading, error, assets, onPick,
+  loading, error, assets, kind, onPick,
 }: {
   loading: boolean;
   error: string | null;
   assets: MediaAsset[];
+  kind: Kind;
   onPick: (url: string) => void;
 }) {
   if (loading) return <p className="text-sm text-zinc-500">Loading…</p>;
@@ -206,6 +277,15 @@ function SavedTab({
     return (
       <p className="rounded-md border border-red-900 bg-red-950/30 p-3 text-xs text-red-200">
         {error}
+      </p>
+    );
+  }
+  if (kind === "audio" && assets.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">
+        Audio assets aren't surfaced in the picker yet — paste a URL into the
+        field, or upload an audio file from the <strong>Library</strong> page
+        first. Pexels / Pixabay search isn't available for audio.
       </p>
     );
   }
@@ -350,13 +430,17 @@ function PickerCard({
  * inside a template form so the URL field gets a "Pick from library"
  * shortcut without each form re-implementing the modal state. */
 export function MediaPickerButton({
-  onPick, kind, label = "Pick",
+  onPick, kind, label,
 }: {
   onPick: (url: string) => void;
   kind: Kind;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const fallback =
+    kind === "audio" ? "Pick audio" :
+    kind === "image" ? "Pick image" :
+    "Pick video";
   return (
     <>
       <button
@@ -364,7 +448,7 @@ export function MediaPickerButton({
         onClick={() => setOpen(true)}
         className="rounded-md border border-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:border-blue-700 hover:bg-zinc-900"
       >
-        {label}
+        {label ?? fallback}
       </button>
       <MediaPicker
         open={open}

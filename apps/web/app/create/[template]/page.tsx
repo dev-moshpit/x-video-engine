@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import {
+  CaptionLanguagePicker,
+  PacingPicker,
+  StylePresetPicker,
+} from "@/components/catalog-pickers";
 import { MediaPickerButton } from "@/components/media-picker";
 import { RecommendationHint } from "@/components/recommendation-hint";
 import { Button } from "@/components/ui/button";
@@ -94,6 +99,13 @@ const CAPTION_STYLES = [
   "impact_uppercase",
   "minimal_lower_third",
   "karaoke_3word",
+] as const;
+
+const VOICES = [
+  { id: "en-US-AriaNeural", label: "Aria - clear neutral" },
+  { id: "en-US-JennyNeural", label: "Jenny - warm narrator" },
+  { id: "en-US-GuyNeural", label: "Guy - dramatic / energetic" },
+  { id: "en-US-AndrewNeural", label: "Andrew - cinematic" },
 ] as const;
 
 export default function CreateProjectPage({
@@ -208,6 +220,31 @@ function CaptionStyleSelect({
   );
 }
 
+function VoiceSelect({
+  value,
+  onChange,
+  allowNone = true,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  allowNone?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm text-zinc-100"
+    >
+      {allowNone ? <option value="">Template default</option> : null}
+      {VOICES.map((voice) => (
+        <option key={voice.id} value={voice.id}>
+          {voice.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 async function submitProject(
   router: RouterT,
   getToken: GetTokenT,
@@ -240,7 +277,13 @@ function AIStoryForm({ router, getToken }: { router: RouterT; getToken: GetToken
   const [duration, setDuration] = useState(20);
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [style, setStyle] = useState("");
+  const [stylePreset, setStylePreset] = useState<string | undefined>(undefined);
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [seed, setSeed] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-AndrewNeural");
+  const [captionStyle, setCaptionStyle] = useState("kinetic_word");
+  const [musicBed, setMusicBed] = useState("none");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -259,7 +302,13 @@ function AIStoryForm({ router, getToken }: { router: RouterT; getToken: GetToken
               duration,
               aspect,
               ...(style ? { style } : {}),
+              ...(stylePreset ? { style_preset: stylePreset } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
               ...(seed ? { seed: Number(seed) } : {}),
+              ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(captionStyle ? { caption_style: captionStyle } : {}),
+              ...(musicBed && musicBed !== "none" ? { music_bed: musicBed } : {}),
             },
           },
           setError,
@@ -326,15 +375,46 @@ function AIStoryForm({ router, getToken }: { router: RouterT; getToken: GetToken
         </div>
       </div>
 
+      <StylePresetPicker value={stylePreset} onChange={setStylePreset} />
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+
       <div className="grid gap-2">
-        <Label htmlFor="style">Style cue (optional)</Label>
+        <Label htmlFor="style">Style cue (optional, free-form)</Label>
         <Input
           id="style"
-          placeholder="e.g. cinematic, dreamy, neon"
+          placeholder="overrides preset wording — e.g. cinematic, dreamy, neon"
           value={style}
           onChange={(e) => setStyle(e.target.value)}
         />
       </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label>Voice</Label>
+          <VoiceSelect value={voiceName} onChange={setVoiceName} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Caption style</Label>
+          <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
+        </div>
+        <div className="grid gap-2">
+          <Label>Music bed</Label>
+          <select
+            value={musicBed}
+            onChange={(e) => setMusicBed(e.target.value)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm text-zinc-100"
+          >
+            <option value="none">None</option>
+            <option value="auto">Auto if available</option>
+          </select>
+        </div>
+      </div>
+
+      <CaptionLanguagePicker
+        value={captionLanguage}
+        onChange={setCaptionLanguage}
+      />
 
       <ErrorBox error={error} />
 
@@ -355,11 +435,17 @@ function AIStoryForm({ router, getToken }: { router: RouterT; getToken: GetToken
 function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
   const [name, setName] = useState("");
   const [subreddit, setSubreddit] = useState("AskReddit");
+  const [username, setUsername] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [upvotes, setUpvotes] = useState(1200);
+  const [comments, setComments] = useState(180);
   const [duration, setDuration] = useState(30);
-  const [voiceName, setVoiceName] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("kinetic_word");
+  const [stylePreset, setStylePreset] = useState<string | undefined>(undefined);
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -377,9 +463,15 @@ function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetT
               subreddit,
               title,
               body,
+              upvotes,
+              comments,
               duration,
               caption_style: captionStyle,
+              ...(username ? { username } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(stylePreset ? { style_preset: stylePreset } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -403,7 +495,7 @@ function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetT
         onApplyVoice={(v) => setVoiceName(v)}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div className="grid gap-2">
           <Label htmlFor="subreddit">Subreddit *</Label>
           <Input
@@ -414,16 +506,43 @@ function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetT
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="duration">Duration (sec)</Label>
+          <Label>Username</Label>
           <Input
-            id="duration"
-            type="number"
-            min={8}
-            max={90}
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
+            placeholder="optional"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
         </div>
+        <div className="grid gap-2">
+          <Label>Upvotes</Label>
+          <Input
+            type="number"
+            min={0}
+            value={upvotes}
+            onChange={(e) => setUpvotes(Number(e.target.value))}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Comments</Label>
+          <Input
+            type="number"
+            min={0}
+            value={comments}
+            onChange={(e) => setComments(Number(e.target.value))}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="duration">Duration (sec)</Label>
+        <Input
+          id="duration"
+          type="number"
+          min={8}
+          max={90}
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+        />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="title">Post title *</Label>
@@ -449,19 +568,18 @@ function RedditStoryForm({ router, getToken }: { router: RouterT; getToken: GetT
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label htmlFor="voice_name">Voice (optional)</Label>
-          <Input
-            id="voice_name"
-            placeholder="e.g. en-US-GuyNeural"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-          />
+          <Label htmlFor="voice_name">Voice</Label>
+          <VoiceSelect value={voiceName} onChange={setVoiceName} />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="cap_style">Caption style</Label>
           <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
         </div>
       </div>
+
+      <StylePresetPicker value={stylePreset} onChange={setStylePreset} />
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
 
@@ -489,8 +607,11 @@ function VoiceoverForm({ router, getToken }: { router: RouterT; getToken: GetTok
   const [script, setScript] = useState("");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [bgColor, setBgColor] = useState("#0b0b0f");
-  const [voiceName, setVoiceName] = useState("");
-  const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [bgUrl, setBgUrl] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
+  const [captionStyle, setCaptionStyle] = useState("clean_subtitle");
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -509,7 +630,10 @@ function VoiceoverForm({ router, getToken }: { router: RouterT; getToken: GetTok
               aspect,
               background_color: bgColor,
               caption_style: captionStyle,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -567,14 +691,34 @@ function VoiceoverForm({ router, getToken }: { router: RouterT; getToken: GetTok
         </div>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="voice_name">Voice (optional)</Label>
-        <Input
-          id="voice_name"
-          placeholder="e.g. en-US-AriaNeural"
-          value={voiceName}
-          onChange={(e) => setVoiceName(e.target.value)}
-        />
+        <Label htmlFor="background_url">Background video/image URL</Label>
+        <div className="flex gap-2">
+          <Input
+            id="background_url"
+            placeholder="https://... or select from library"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
       </div>
+      <div className="grid gap-2">
+        <Label htmlFor="voice_name">Voice</Label>
+        <VoiceSelect value={voiceName} onChange={setVoiceName} />
+      </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
 
@@ -597,7 +741,8 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
   const [language, setLanguage] = useState("en");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [bgColor, setBgColor] = useState("#0b0b0f");
-  const [voiceName, setVoiceName] = useState("");
+  const [bgUrl, setBgUrl] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -611,13 +756,14 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
           getToken,
           {
             template: "auto_captions",
-            name: name || script.slice(0, 60),
+            name: name || script.slice(0, 60) || "Auto-caption upload",
             template_input: {
-              script,
+              script: script || "Transcribe this uploaded media.",
               language,
               aspect,
               background_color: bgColor,
               caption_style: captionStyle,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
               ...(audioUrl ? { audio_url: audioUrl } : {}),
               ...(videoUrl ? { video_url: videoUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
@@ -645,11 +791,11 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
       />
 
       <div className="grid gap-2">
-        <Label htmlFor="script">Script *</Label>
+        <Label htmlFor="script">Script</Label>
         <Textarea
           id="script"
-          required
-          minLength={10}
+          required={!audioUrl && !videoUrl}
+          minLength={audioUrl || videoUrl ? undefined : 10}
           maxLength={8000}
           rows={8}
           placeholder="The text to caption. AI voice reads it; words appear word-by-word."
@@ -672,6 +818,11 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
               onChange={(e) => setAudioUrl(e.target.value)}
               className="flex-1"
             />
+            <MediaPickerButton
+              kind="video"
+              label="Select from Library"
+              onPick={(url) => setAudioUrl(url)}
+            />
           </div>
         </div>
         <div className="grid gap-2">
@@ -686,7 +837,7 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
             />
             <MediaPickerButton
               kind="video"
-              label="Pick"
+              label="Select from Library"
               onPick={(url) => setVideoUrl(url)}
             />
           </div>
@@ -721,19 +872,38 @@ function AutoCaptionsForm({ router, getToken }: { router: RouterT; getToken: Get
         </div>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="voice_name">Voice (optional)</Label>
-        <Input
-          id="voice_name"
-          placeholder="e.g. en-US-AriaNeural"
-          value={voiceName}
-          onChange={(e) => setVoiceName(e.target.value)}
-        />
+        <Label htmlFor="background_url">Background URL for script-only renders</Label>
+        <div className="flex gap-2">
+          <Input
+            id="background_url"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="voice_name">Voice</Label>
+        <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
 
       <ErrorBox error={error} />
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={submitting || script.length < 10}>
+        <Button
+          type="submit"
+          disabled={submitting || (!audioUrl && !videoUrl && script.length < 10)}
+        >
           {submitting ? "Creating…" : "Create project"}
         </Button>
       </div>
@@ -755,9 +925,15 @@ function FakeTextForm({ router, getToken }: { router: RouterT; getToken: GetToke
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [chatTitle, setChatTitle] = useState("Mom");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
-  const [narrate, setNarrate] = useState(true);
-  const [voiceName, setVoiceName] = useState("");
+  const [narrate, setNarrate] = useState(false);
+  const [voiceName, setVoiceName] = useState("en-US-JennyNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
+  const [bgColor, setBgColor] = useState("#111827");
+  const [bgUrl, setBgUrl] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [showTimestamps, setShowTimestamps] = useState(false);
+  const [pacing, setPacing] = useState<string | undefined>(undefined);
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<FakeTextMessageRow[]>([
     { sender: "them", text: "Are you home?", typing_ms: 800, hold_ms: 1500 },
     { sender: "me", text: "Yeah, why?", typing_ms: 800, hold_ms: 1500 },
@@ -795,7 +971,13 @@ function FakeTextForm({ router, getToken }: { router: RouterT; getToken: GetToke
               aspect,
               narrate,
               caption_style: captionStyle,
+              background_color: bgColor,
+              show_timestamps: showTimestamps,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
+              ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
               messages: cleaned,
             },
           },
@@ -917,18 +1099,75 @@ function FakeTextForm({ router, getToken }: { router: RouterT; getToken: GetToke
           Narrate (TTS reads conversation aloud)
         </label>
         <div className="grid gap-2">
-          <Label>Voice (optional)</Label>
-          <Input
-            placeholder="en-US-AriaNeural"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-          />
+          <Label>Voice</Label>
+          <VoiceSelect value={voiceName} onChange={setVoiceName} />
         </div>
         <div className="grid gap-2">
           <Label>Caption style</Label>
           <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
         </div>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label>Background color</Label>
+          <Input
+            pattern="^#[0-9a-fA-F]{6}$"
+            value={bgColor}
+            onChange={(e) => setBgColor(e.target.value)}
+          />
+        </div>
+        <label className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={showTimestamps}
+            onChange={(e) => setShowTimestamps(e.target.checked)}
+          />
+          Show timestamp
+        </label>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Background video/image URL</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Optional saved library URL"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Avatar URL</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Optional saved image URL"
+            value={avatarUrl}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Select from Library"
+            onPick={(url) => setAvatarUrl(url)}
+          />
+        </div>
+      </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
 
@@ -950,10 +1189,12 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
   const [optionB, setOptionB] = useState("");
   const [colorA, setColorA] = useState("#1f6feb");
   const [colorB, setColorB] = useState("#dc2626");
+  const [bgUrl, setBgUrl] = useState("");
   const [timer, setTimer] = useState(5);
   const [pctA, setPctA] = useState(50);
+  const [seed, setSeed] = useState("");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
-  const [voiceName, setVoiceName] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -974,8 +1215,10 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
               option_b: optionB,
               color_a: colorA,
               color_b: colorB,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
               timer_seconds: timer,
               reveal_percent_a: pctA,
+              ...(seed ? { seed: Number(seed) } : {}),
               aspect,
               caption_style: captionStyle,
               ...(voiceName ? { voice_name: voiceName } : {}),
@@ -1026,7 +1269,28 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid gap-2">
+        <Label>Background video/image URL</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Optional saved library URL"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="grid gap-2">
           <Label>Timer (s)</Label>
           <Input
@@ -1052,13 +1316,17 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
           <AspectSelect value={aspect} onChange={setAspect} />
         </div>
         <div className="grid gap-2">
+          <Label>Seed</Label>
+          <Input value={seed} onChange={(e) => setSeed(e.target.value)} />
+        </div>
+        <div className="grid gap-2">
           <Label>Caption style</Label>
           <CaptionStyleSelect value={captionStyle} onChange={setCaptionStyle} />
         </div>
       </div>
       <div className="grid gap-2">
-        <Label>Voice (optional)</Label>
-        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+        <Label>Voice</Label>
+        <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
 
       <ErrorBox error={error} />
@@ -1076,13 +1344,15 @@ function WouldYouRatherForm({ router, getToken }: { router: RouterT; getToken: G
 function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTokenT }) {
   const [name, setName] = useState("");
   const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+  const [mainPosition, setMainPosition] = useState<"first" | "second">("first");
+  const [cropMode, setCropMode] = useState<"cover" | "contain">("cover");
   const [mainUrl, setMainUrl] = useState("");
   const [fillerUrl, setFillerUrl] = useState("");
   const [script, setScript] = useState("");
   const [duration, setDuration] = useState(30);
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [bgColor, setBgColor] = useState("#0b0b0f");
-  const [voiceName, setVoiceName] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1099,6 +1369,8 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
             name: name || script.slice(0, 60),
             template_input: {
               layout,
+              main_position: mainPosition,
+              crop_mode: cropMode,
               script,
               duration,
               aspect,
@@ -1119,7 +1391,7 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
         <Label>Project name (optional)</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="grid gap-2">
           <Label>Layout</Label>
           <select
@@ -1129,6 +1401,28 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
           >
             <option value="vertical">Top / Bottom</option>
             <option value="horizontal">Left / Right</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Main position</Label>
+          <select
+            value={mainPosition}
+            onChange={(e) => setMainPosition(e.target.value as typeof mainPosition)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm"
+          >
+            <option value="first">Top / Left</option>
+            <option value="second">Bottom / Right</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label>Fit</Label>
+          <select
+            value={cropMode}
+            onChange={(e) => setCropMode(e.target.value as typeof cropMode)}
+            className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm"
+          >
+            <option value="cover">Cover crop</option>
+            <option value="contain">Contain</option>
           </select>
         </div>
         <div className="grid gap-2">
@@ -1157,7 +1451,7 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
           />
           <MediaPickerButton
             kind="video"
-            label="Pick from library"
+            label="Select from Library"
             onPick={(url) => setMainUrl(url)}
           />
         </div>
@@ -1172,7 +1466,7 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
           />
           <MediaPickerButton
             kind="video"
-            label="Pick"
+            label="Select from Library"
             onPick={(url) => setFillerUrl(url)}
           />
         </div>
@@ -1199,8 +1493,8 @@ function SplitVideoForm({ router, getToken }: { router: RouterT; getToken: GetTo
           />
         </div>
         <div className="grid gap-2">
-          <Label>Voice (optional)</Label>
-          <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+          <Label>Voice</Label>
+          <VoiceSelect value={voiceName} onChange={setVoiceName} />
         </div>
         <div className="grid gap-2">
           <Label>Caption style</Label>
@@ -1233,9 +1527,10 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
   const [verified, setVerified] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
-  const [voiceName, setVoiceName] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-AriaNeural");
   const [captionStyle, setCaptionStyle] = useState("bold_word");
   const [bgColor, setBgColor] = useState("#0b0b0f");
+  const [bgUrl, setBgUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1265,6 +1560,7 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
               dark_mode: darkMode,
               aspect,
               background_color: bgColor,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
               caption_style: captionStyle,
               ...(voiceName ? { voice_name: voiceName } : {}),
             },
@@ -1370,8 +1666,29 @@ function TwitterForm({ router, getToken }: { router: RouterT; getToken: GetToken
           <Input pattern="^#[0-9a-fA-F]{6}$" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
         </div>
         <div className="grid gap-2">
-          <Label>Voice (optional)</Label>
-          <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+          <Label>Voice</Label>
+          <VoiceSelect value={voiceName} onChange={setVoiceName} />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Background video/image URL</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Optional saved library URL"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
         </div>
       </div>
 
@@ -1402,8 +1719,11 @@ function TopFiveForm({ router, getToken }: { router: RouterT; getToken: GetToken
   const [perItem, setPerItem] = useState(4);
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
   const [bgColor, setBgColor] = useState("#0b0b0f");
-  const [voiceName, setVoiceName] = useState("");
+  const [bgUrl, setBgUrl] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
+  const [pacing, setPacing] = useState<string | undefined>("medium");
+  const [captionLanguage, setCaptionLanguage] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1439,8 +1759,11 @@ function TopFiveForm({ router, getToken }: { router: RouterT; getToken: GetToken
               per_item_seconds: perItem,
               aspect,
               background_color: bgColor,
+              ...(bgUrl ? { background_url: bgUrl } : {}),
               caption_style: captionStyle,
               ...(voiceName ? { voice_name: voiceName } : {}),
+              ...(pacing ? { pacing } : {}),
+              ...(captionLanguage ? { caption_language: captionLanguage } : {}),
             },
           },
           setError,
@@ -1517,9 +1840,33 @@ function TopFiveForm({ router, getToken }: { router: RouterT; getToken: GetToken
         </div>
       </div>
       <div className="grid gap-2">
-        <Label>Voice (optional)</Label>
-        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+        <Label>Voice</Label>
+        <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
+      <div className="grid gap-2">
+        <Label>Background video/image URL</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Optional saved library URL"
+            value={bgUrl}
+            onChange={(e) => setBgUrl(e.target.value)}
+            className="flex-1"
+          />
+          <MediaPickerButton
+            kind="video"
+            label="Select from Library"
+            onPick={(url) => setBgUrl(url)}
+          />
+          <MediaPickerButton
+            kind="image"
+            label="Image"
+            onPick={(url) => setBgUrl(url)}
+          />
+        </div>
+      </div>
+
+      <PacingPicker value={pacing} onChange={setPacing} />
+      <CaptionLanguagePicker value={captionLanguage} onChange={setCaptionLanguage} />
 
       <ErrorBox error={error} />
       <div>
@@ -1540,7 +1887,7 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
   const [bgColor, setBgColor] = useState("#0b0b0f");
   const [rate, setRate] = useState("+15%");
   const [aspect, setAspect] = useState<"9:16" | "16:9" | "1:1">("9:16");
-  const [voiceName, setVoiceName] = useState("");
+  const [voiceName, setVoiceName] = useState("en-US-GuyNeural");
   const [captionStyle, setCaptionStyle] = useState("impact_uppercase");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1597,7 +1944,7 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
           />
           <MediaPickerButton
             kind="video"
-            label="Pick from library"
+            label="Select from Library"
             onPick={(url) => setBgUrl(url)}
           />
         </div>
@@ -1626,8 +1973,8 @@ function RobloxRantForm({ router, getToken }: { router: RouterT; getToken: GetTo
         </div>
       </div>
       <div className="grid gap-2">
-        <Label>Voice (optional)</Label>
-        <Input value={voiceName} onChange={(e) => setVoiceName(e.target.value)} />
+        <Label>Voice</Label>
+        <VoiceSelect value={voiceName} onChange={setVoiceName} />
       </div>
 
       <ErrorBox error={error} />
