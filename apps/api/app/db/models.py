@@ -286,6 +286,305 @@ class BrandKit(Base):
         default=_utcnow, onupdate=_utcnow,
     )
 
+class ClipJob(Base):
+    """AI Clipper analyze job — Phase 1 (Platform).
+
+    The user uploads a long video / audio (via the existing presigned
+    upload flow) and POSTs to ``/api/clips/analyze`` with the resulting
+    URL. The api inserts one of these rows + enqueues the worker. The
+    worker transcribes, segments, scores → writes ``moments`` JSON +
+    flips status to "complete".
+
+    Each row owns a ``ClipArtifact`` per exported clip the user picks
+    afterwards.
+    """
+    __tablename__ = "clip_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    source_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="video",
+    )
+    language: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="auto",
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    progress: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0,
+    )
+    duration_sec: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True,
+    )
+    transcript_text: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True,
+    )
+    moments: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+    artifacts: Mapped[list["ClipArtifact"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan",
+    )
+
+
+class ClipArtifact(Base):
+    """One exported clip from a ``ClipJob``.
+
+    Created when the user picks a moment + posts ``/api/clips/export``.
+    The worker fills ``url`` after the export completes.
+    """
+    __tablename__ = "clip_artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    clip_job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clip_jobs.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    moment_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    start_sec: Mapped[float] = mapped_column(Float, nullable=False)
+    end_sec: Mapped[float] = mapped_column(Float, nullable=False)
+    aspect: Mapped[str] = mapped_column(String(8), nullable=False)
+    captions: Mapped[bool] = mapped_column(nullable=False, default=True)
+    url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+
+    job: Mapped[ClipJob] = relationship(back_populates="artifacts")
+
+
+class VideoGeneration(Base):
+    """Direct video-model generation request — Platform Phase 1.
+
+    Sits parallel to the template-based ``Render`` row but uses the
+    provider abstraction in ``apps/worker/video_models``. Lets users
+    pick a specific model (Wan 2.1, SVD, CogVideoX, …) and submit a
+    pure prompt without going through one of the 10 templates.
+    """
+    __tablename__ = "video_generations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    provider_id: Mapped[str] = mapped_column(
+        String(32), nullable=False,
+    )
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    duration_seconds: Mapped[float] = mapped_column(
+        Float, nullable=False, default=4.0,
+    )
+    fps: Mapped[int] = mapped_column(Integer, nullable=False, default=24)
+    aspect_ratio: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="9:16",
+    )
+    seed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    progress: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0,
+    )
+    output_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+
+class PresenterJob(Base):
+    """AI Presenter / talking-head job — Platform Phase 1.
+
+    The user supplies an avatar image + a script + (optionally) a
+    headline. The worker synthesizes voice, runs the chosen lipsync
+    provider, and optionally overlays a news lower-third.
+    """
+    __tablename__ = "presenter_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    provider_id: Mapped[str] = mapped_column(
+        String(32), nullable=False,
+    )
+    script: Mapped[str] = mapped_column(Text, nullable=False)
+    avatar_image_url: Mapped[str] = mapped_column(
+        String(1000), nullable=False,
+    )
+    voice: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    voice_rate: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="+0%",
+    )
+    aspect_ratio: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="9:16",
+    )
+    headline: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True,
+    )
+    ticker: Mapped[Optional[str]] = mapped_column(
+        String(400), nullable=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    progress: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0,
+    )
+    output_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+
+class PublishingJob(Base):
+    """One upload-attempt to a social platform — Platform Phase 1.
+
+    Created when the user clicks Publish for a render. The worker
+    drains ``saas:publish:jobs``, calls the right provider's
+    ``upload``, and writes ``external_id`` + ``external_url`` back.
+    """
+    __tablename__ = "publishing_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    provider_id: Mapped[str] = mapped_column(
+        String(32), nullable=False,
+    )
+    video_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(
+        Text, nullable=False, default="",
+    )
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    privacy: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="private",
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    external_id: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True,
+    )
+    external_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+
+class EditorJob(Base):
+    """Single-pass video editor job — Platform Phase 1.
+
+    Trim + reframe + auto-caption + export, all in one ffmpeg pass.
+    Mirrors the ``ClipArtifact`` shape but with explicit trim bounds
+    + caption-language metadata so the worker doesn't need a separate
+    Moment record.
+    """
+    __tablename__ = "editor_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    source_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    trim_start: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    trim_end: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    aspect: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="9:16",
+    )
+    captions: Mapped[bool] = mapped_column(
+        nullable=False, default=True,
+    )
+    caption_language: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="auto",
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    progress: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0,
+    )
+    output_url: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True,
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+
 
 class MediaAsset(Base):
     """Phase 2.5 — saved media library entry.
