@@ -186,6 +186,71 @@ HF_HOME=/var/lib/hf py -3.11 .local/qa_harness.py --scope heavy --report QA_HEAV
 - **Clerk keyless** — fine for dev. Production must use a real Clerk
   tenant (the keyless tenant rotates issuers).
 
+## Platform Phase 1 — additional workers
+
+Five new subsystems landed (commits `2fb4c44 .. cd19499`) that each
+run their own worker process and queue. None are required for the
+core 10-template render path, but each must be wired separately when
+turned on.
+
+### Migrations
+
+`alembic upgrade head` applies these new schemas:
+
+  - `0008_clip_jobs` — `clip_jobs`, `clip_artifacts`
+  - `0009_editor_jobs` — `editor_jobs`
+  - `0010_video_generations` — `video_generations`
+  - `0011_presenter_jobs` — `presenter_jobs`
+  - `0012_publishing_jobs` — `publishing_jobs`
+
+None alter or drop existing tables. The 10-template render path is
+untouched.
+
+### Workers
+
+Run separately from the existing render + exports workers:
+
+```bash
+py -3.11 apps/worker/clipper_main.py        # saas:clipper:* queues
+py -3.11 apps/worker/editor_main.py         # saas:editor:jobs
+py -3.11 apps/worker/generation_main.py     # saas:videogen:jobs
+py -3.11 apps/worker/presenter_main.py      # saas:presenter:jobs
+py -3.11 apps/worker/publishing_main.py     # saas:publish:jobs
+```
+
+Each one BLPOPs its own queue and writes status back via raw SQL —
+same pattern as the existing render worker. Set `DATABASE_URL` and
+`REDIS_URL` on every process.
+
+### Provider gating
+
+Every Phase 1 mode refuses to enqueue work when the underlying
+provider isn't ready. The api responds with a 503 + setup hint;
+the UI disables the entry point. Probes:
+
+  - `GET /api/system/health` — ffmpeg, redis, storage, GPU,
+    faster-whisper
+  - `GET /api/models/health` — per-video-model HF cache state
+  - `GET /api/video-models/providers` — same as above with mode + VRAM
+  - `GET /api/presenter/providers` — Wav2Lip / SadTalker / MuseTalk
+  - `GET /api/publishing/providers` — YouTube Data API readiness
+
+The frontend `/settings/system` page is a unified view of all of the
+above.
+
+### Required env (additions)
+
+| Var | Used by | Notes |
+|---|---|---|
+| `XVE_MODELS_DIR` | system_health, video_models, presenter | parent dir for HF caches + lipsync repos |
+| `HF_HOME` / `HF_HUB_CACHE` | video_models | huggingface cache root |
+| `XVIDEO_WHISPER_MODEL` | clipper | faster-whisper model name; default `base` |
+| `XVE_WAV2LIP_DIR` / `XVE_SADTALKER_DIR` / `XVE_MUSETALK_DIR` | presenter | path to upstream lipsync repos + checkpoints |
+| `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` / `YOUTUBE_REFRESH_TOKEN` | publishing worker | OAuth refresh-token flow |
+
+See `D:/x-video-engine-backup/ENV_REGISTRY.md` for the full
+inventory across api + workers + web.
+
 ## CI gate
 
 Before any production deploy:
