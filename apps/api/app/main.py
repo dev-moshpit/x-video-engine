@@ -29,20 +29,59 @@ from app.auth.deps import CurrentDbUser
 from app.routers import (
     billing,
     brand_kits,
+    clips,
+    editor,
+    exports,
+    insights,
     media,
     preferences,
+    presenter,
     projects,
     publishing,
+    publishing_targets,
     renders,
+    saved_prompts,
+    shares,
     stripe_webhook,
+    system,
     templates,
     uploads,
     usage,
+    video_models,
     webhooks,
 )
 
 
 app = FastAPI(title="x-video-engine SaaS API", version="0.1.0")
+
+
+# ─── Dev no-docker convenience ──────────────────────────────────────────
+# When XVE_DEV_FAKEREDIS=1 we swap the live Redis client for fakeredis on
+# both queue producers (render + export). Lets the api boot + accept
+# enqueues without a real Redis broker. The worker side won't see those
+# jobs (separate process / fakeredis instance) — useful only for UI/CRUD
+# testing without infra.
+if os.environ.get("XVE_DEV_FAKEREDIS") == "1":
+    try:
+        import fakeredis as _fakeredis
+        from app.services import clipper as _clipper_mod
+        from app.services import editor as _editor_mod
+        from app.services import exports as _exports_mod
+        from app.services import presenter as _presenter_mod
+        from app.services import publishing_targets as _publish_mod
+        from app.services import queue as _queue_mod
+        from app.services import video_models as _videogen_mod
+
+        _shared = _fakeredis.FakeRedis(decode_responses=True)
+        _queue_mod.set_redis(_shared)
+        _exports_mod.set_redis(_shared)
+        _clipper_mod.set_redis(_shared)
+        _editor_mod.set_redis(_shared)
+        _videogen_mod.set_redis(_shared)
+        _presenter_mod.set_redis(_shared)
+        _publish_mod.set_redis(_shared)
+    except ImportError:
+        pass
 
 
 # CORS — the Next.js web app on :3000 (or the configured WEB_BASE_URL)
@@ -76,6 +115,16 @@ app.include_router(billing.router)
 app.include_router(stripe_webhook.router)
 app.include_router(publishing.router)
 app.include_router(brand_kits.router)
+app.include_router(saved_prompts.router)
+app.include_router(insights.router)
+app.include_router(shares.router)
+app.include_router(exports.router)
+app.include_router(system.router)
+app.include_router(clips.router)
+app.include_router(editor.router)
+app.include_router(video_models.router)
+app.include_router(presenter.router)
+app.include_router(publishing_targets.router)
 
 
 class HealthResponse(BaseModel):
