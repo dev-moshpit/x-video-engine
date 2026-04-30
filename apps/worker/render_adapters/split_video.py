@@ -21,11 +21,11 @@ from pathlib import Path
 import imageio_ffmpeg
 
 from xvideo.post.tts import synthesize, voice_for_pack
-from xvideo.post.word_captions import build_ass
 from xvideo.post.prompt_video_stitcher import render_prompt_native_final
 from xvideo.prompt_native.schema import aspect_to_size
 
-from apps.worker.render_adapters._common import render_script_with_solid_bg
+from apps.worker.render_adapters._captions import write_caption_file
+from apps.worker.render_adapters._common import render_script_with_background
 from apps.worker.render_adapters._video_input import resolve_video_input
 from apps.worker.template_inputs import SplitVideoInput
 
@@ -38,6 +38,8 @@ def _split_compose(
     main: Path,
     filler: Path | None,
     layout: str,
+    main_position: str,
+    crop_mode: str,
     size: tuple[int, int],
     duration: float,
     background_color: str,
@@ -63,16 +65,28 @@ def _split_compose(
             "-stream_loop", "-1", "-i", str(main),
             "-stream_loop", "-1", "-i", str(filler),
         ]
-        scale_main = (
-            f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
-            f"crop={half_w}:{half_h}[m]"
-        )
-        scale_fill = (
-            f"[1:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
-            f"crop={half_w}:{half_h}[f]"
-        )
+        if crop_mode == "contain":
+            bg_hex = background_color.lstrip("#")
+            scale_main = (
+                f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=decrease,"
+                f"pad={half_w}:{half_h}:(ow-iw)/2:(oh-ih)/2:0x{bg_hex}[m]"
+            )
+            scale_fill = (
+                f"[1:v]scale={half_w}:{half_h}:force_original_aspect_ratio=decrease,"
+                f"pad={half_w}:{half_h}:(ow-iw)/2:(oh-ih)/2:0x{bg_hex}[f]"
+            )
+        else:
+            scale_main = (
+                f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
+                f"crop={half_w}:{half_h}[m]"
+            )
+            scale_fill = (
+                f"[1:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
+                f"crop={half_w}:{half_h}[f]"
+            )
         stack = "hstack=inputs=2" if layout == "horizontal" else "vstack=inputs=2"
-        fg = f"{scale_main};{scale_fill};[m][f]{stack}[out]"
+        order = "[f][m]" if main_position == "second" else "[m][f]"
+        fg = f"{scale_main};{scale_fill};{order}{stack}[out]"
         cmd += ["-filter_complex", fg,
                 "-map", "[out]"]
     else:
@@ -83,12 +97,19 @@ def _split_compose(
             "-f", "lavfi",
             "-i", f"color=c=0x{bg_hex}:s={half_w}x{half_h}:d={duration:.2f}",
         ]
-        scale_main = (
-            f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
-            f"crop={half_w}:{half_h}[m]"
-        )
+        if crop_mode == "contain":
+            scale_main = (
+                f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=decrease,"
+                f"pad={half_w}:{half_h}:(ow-iw)/2:(oh-ih)/2:0x{bg_hex}[m]"
+            )
+        else:
+            scale_main = (
+                f"[0:v]scale={half_w}:{half_h}:force_original_aspect_ratio=increase,"
+                f"crop={half_w}:{half_h}[m]"
+            )
         stack = "hstack=inputs=2" if layout == "horizontal" else "vstack=inputs=2"
-        fg = f"{scale_main};[m][1:v]{stack}[out]"
+        order = "[1:v][m]" if main_position == "second" else "[m][1:v]"
+        fg = f"{scale_main};{order}{stack}[out]"
         cmd += ["-filter_complex", fg,
                 "-map", "[out]"]
 
@@ -117,11 +138,13 @@ def render(input: SplitVideoInput, work_dir: Path) -> Path:
 
     # No usable main upload — fall back to plain voiceover-style render.
     if main is None:
-        return render_script_with_solid_bg(
+        return render_script_with_background(
             script=input.script,
             voice_name=input.voice_name,
             aspect=input.aspect,
             background_color=input.background_color,
+            background_url=None,
+            caption_style=input.caption_style,
             work_dir=work_dir,
             base="split_video",
         )
@@ -140,6 +163,8 @@ def render(input: SplitVideoInput, work_dir: Path) -> Path:
     bg_path = _split_compose(
         main=main, filler=filler,
         layout=input.layout,
+        main_position=input.main_position,
+        crop_mode=input.crop_mode,
         size=size,
         duration=target_dur,
         background_color=input.background_color,
@@ -148,12 +173,11 @@ def render(input: SplitVideoInput, work_dir: Path) -> Path:
 
     captions_path: Path | None = None
     if tts.words and input.caption_style is not None:
-        captions_path = work_dir / "split_video_captions.ass"
-        build_ass(
+        captions_path = write_caption_file(
             words=tts.words,
-            out_path=captions_path,
-            video_width=size[0],
-            video_height=size[1],
+            out_path=work_dir / "split_video_captions.ass",
+            style=input.caption_style,
+            size=size,
         )
 
     final_path = work_dir / "split_video.mp4"

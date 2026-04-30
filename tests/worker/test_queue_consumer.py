@@ -238,6 +238,16 @@ def test_run_one_job_marks_failed_on_exception(fake_redis, shared_engine, tmp_pa
     assert row.stage == "failed"
     assert "synthetic adapter failure" in row.error
 
+    # Phase 11.5 — failed renders must NOT record usage rows. The user
+    # didn't get a video out of this; counting it as an export would be
+    # billing-incorrect.
+    with shared_engine.connect() as conn:
+        usage_rows = conn.execute(
+            text("SELECT kind FROM usage WHERE user_id = :u"),
+            {"u": user_id},
+        ).all()
+    assert usage_rows == []
+
 
 # ─── Schema parity ──────────────────────────────────────────────────────
 
@@ -256,3 +266,10 @@ def test_render_schema_parity_with_api():
     )
     # Worker copy of RenderStage should have the same members.
     assert {s.value for s in RenderStage} == {s.value for s in APIStage}
+
+
+def test_export_schema_parity_with_api():
+    """Phase 13.5 — ExportJobRequest worker copy must match the api copy."""
+    from apps.worker.schemas import ExportJobRequest as WorkerReq
+    from app.services.exports import ExportJobRequest as APIReq
+    assert WorkerReq.model_json_schema() == APIReq.model_json_schema()

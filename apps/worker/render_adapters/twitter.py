@@ -80,4 +80,6 @@ def render(input: TwitterInput, work_dir: Path) -> Path:
         size=size,
         work_dir=work_dir,
         base="twitter",
+        background_url=input.background_url,
+        overlay_opacity=0.96,
     )

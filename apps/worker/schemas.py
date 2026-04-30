@@ -47,3 +47,19 @@ class RenderJobStatus(BaseModel):
     progress: float
     final_mp4_url: Optional[str] = None
     error: Optional[str] = None
+
+
+class ExportJobRequest(BaseModel):
+    """Payload pushed onto the export queue.
+
+    The worker reads ``src_url`` directly (R2 / MinIO public URL) so it
+    doesn't need DB access to find the source. ``artifact_id`` is the
+    DB row the worker updates with status / final url when done.
+    """
+    artifact_id: str
+    render_id: str
+    user_id: str
+    job_id: str
+    src_url: str
+    aspect: str
+    captions: bool

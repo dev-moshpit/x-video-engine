@@ -31,10 +31,10 @@ from pathlib import Path
 import imageio_ffmpeg
 
 from xvideo.post.prompt_video_stitcher import render_prompt_native_final
-from xvideo.post.word_captions import build_ass
 from xvideo.prompt_native.schema import aspect_to_size
 
-from apps.worker.render_adapters._common import render_script_with_solid_bg
+from apps.worker.render_adapters._captions import write_caption_file
+from apps.worker.render_adapters._common import render_script_with_background
 from apps.worker.render_adapters._video_input import (
     resolve_media_input,
     resolve_video_input,
@@ -148,12 +148,11 @@ def _try_whisper_path(
         return None
 
     size = aspect_to_size(input.aspect)
-    captions_path = work_dir / "auto_captions_captions.ass"
-    build_ass(
+    captions_path = write_caption_file(
         words=words,
-        out_path=captions_path,
-        video_width=size[0],
-        video_height=size[1],
+        out_path=work_dir / "auto_captions_captions.ass",
+        style=input.caption_style,
+        size=size,
     )
 
     # Background: user's video if they uploaded one (re-cropped to aspect),
@@ -188,11 +187,13 @@ def render(input: AutoCaptionsInput, work_dir: Path) -> Path:
     if upload_result is not None:
         return upload_result
 
-    return render_script_with_solid_bg(
+    return render_script_with_background(
         script=input.script,
         voice_name=input.voice_name,
         aspect=input.aspect,
         background_color=input.background_color,
+        background_url=input.background_url,
+        caption_style=input.caption_style,
         work_dir=work_dir,
         base="auto_captions",
     )

@@ -13,6 +13,7 @@ Pipeline:
 from __future__ import annotations
 
 from pathlib import Path
+import random
 
 from xvideo.prompt_native.schema import aspect_to_size
 
@@ -23,13 +24,21 @@ from apps.worker.template_inputs import WouldYouRatherInput
 
 
 def _build_script(inp: WouldYouRatherInput) -> str:
-    pct_a = inp.reveal_percent_a
+    pct_a = _reveal_percent(inp)
     pct_b = 100 - pct_a
     return (
         f"Would you rather {inp.option_a}, or {inp.option_b}? "
         f"{pct_a} percent chose {inp.option_a}. "
         f"{pct_b} percent chose {inp.option_b}."
     )
+
+
+def _reveal_percent(inp: WouldYouRatherInput) -> int:
+    """Deterministic reveal when a seed is supplied and the default is kept."""
+    if inp.seed is None or inp.reveal_percent_a != 50:
+        return inp.reveal_percent_a
+    rng = random.Random(f"{inp.seed}:{inp.question}:{inp.option_a}:{inp.option_b}")
+    return rng.randint(35, 65)
 
 
 def _build_frames(
@@ -64,8 +73,8 @@ def _build_frames(
         color_a=inp.color_a,
         color_b=inp.color_b,
         timer_label="RESULTS",
-        pct_a=inp.reveal_percent_a,
-        pct_b=100 - inp.reveal_percent_a,
+        pct_a=_reveal_percent(inp),
+        pct_b=100 - _reveal_percent(inp),
         size=size,
         out_path=reveal_path,
     )
@@ -85,4 +94,6 @@ def render(input: WouldYouRatherInput, work_dir: Path) -> Path:
         size=size,
         work_dir=work_dir,
         base="would_you_rather",
+        background_url=input.background_url,
+        overlay_opacity=0.94,
     )

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 _VIDEO_SUFFIXES = (".mp4", ".mov", ".webm", ".mkv", ".m4v")
 _AUDIO_SUFFIXES = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus")
+_IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 _MEDIA_SUFFIXES = _VIDEO_SUFFIXES + _AUDIO_SUFFIXES
 
 
@@ -59,6 +60,13 @@ def resolve_media_input(
     alongside ``video_url``.
     """
     return _resolve(raw, work_dir, allowed=_MEDIA_SUFFIXES, default_suffix=".mp4")
+
+
+def resolve_image_input(
+    raw: Optional[str], work_dir: Path,
+) -> Optional[Path]:
+    """Return a readable local image Path or ``None``."""
+    return _resolve(raw, work_dir, allowed=_IMAGE_SUFFIXES, default_suffix=".jpg")
 
 
 def _resolve(

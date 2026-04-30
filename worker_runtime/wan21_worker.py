@@ -1,21 +1,21 @@
-"""FastAPI worker runtime for the RTX 2080 desktop.
+"""FastAPI worker runtime for the RTX 2080 desktop — LowPoly Video Engine.
 
-Exposes Wan 2.1 T2V-1.3B generation over HTTP LAN. The laptop orchestrator
-submits jobs, polls status, and downloads the resulting video file.
+Exposes Wan 2.1 T2V-1.3B low-poly generation over HTTP LAN. The laptop
+orchestrator submits jobs, polls status, and downloads the resulting video.
 
 Run on the 2080 desktop:
     python worker_runtime/wan21_worker.py --host 0.0.0.0 --port 8080
 
 Endpoints:
     GET  /health                    — liveness + GPU + VRAM info
-    POST /generate                  — submit a job, returns {job_id, status}
+    POST /generate                  — submit a low-poly job
     GET  /jobs/{job_id}              — poll status
     POST /jobs/{job_id}/cancel       — cancel a queued or running job
     GET  /jobs/{job_id}/download     — stream the output .mp4
 
-Phase 1b scope: scaffolding + protocol + fake generation path (writes a
-dummy mp4). Real Wan 2.1 inference is wired in Phase 1d after the
-laptop↔desktop loop is proven.
+Phase 1a: scaffolding + fake generation (ffmpeg testsrc with color overlay).
+Phase 1c: real Wan 2.1 inference with low-poly prompt conditioning.
+Phase 2b: LoRA adapter loading for faceted style.
 """
 
 from __future__ import annotations
@@ -36,8 +36,6 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 import uvicorn
 
-# Import shared schemas. Worker runtime is deployed standalone, so
-# we import from its own schemas module.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schemas import (
     FailureCode,
@@ -58,7 +56,6 @@ JOBS_DIR = WORKER_ROOT / "jobs"
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ─── In-memory job registry ───────────────────────────────────────────────
-# Phase 1: simple dict + lock. Phase 2+: swap for Redis or SQLite.
 
 _jobs: dict[str, JobStatusResponse] = {}
 _jobs_lock = threading.Lock()
@@ -78,14 +75,15 @@ class _BackendRegistry:
         return list(self._pipelines.keys())
 
     def get(self, backend_name: str):
-        """Get or load a pipeline. Phase 1b stub — returns None until
-        real Wan 2.1 loader is wired in Phase 1d."""
+        """Get or load a pipeline.
+        Phase 1a stub: returns None (fake generation).
+        Phase 1c: loads diffusers WanPipeline.
+        Phase 2b: loads WanPipeline + LoRA adapter.
+        """
         with self._lock:
             if backend_name in self._pipelines:
                 return self._pipelines[backend_name]
-            # Phase 1d: load diffusers WanPipeline here.
-            # self._pipelines[backend_name] = _load_wan21()
-            logger.warning("Backend %s not yet implemented (Phase 1b stub)", backend_name)
+            logger.warning("Backend %s not yet implemented (Phase 1a stub)", backend_name)
             return None
 
 
@@ -113,7 +111,7 @@ def _gpu_info() -> dict:
 # ─── Job execution ────────────────────────────────────────────────────────
 
 def _run_job(req: GenerateRequest):
-    """Execute a generation job. Runs in a background thread."""
+    """Execute a low-poly generation job. Runs in a background thread."""
     job_id = req.job_id
     cancel_evt = _cancel_flags.get(job_id)
     start = time.time()
@@ -127,15 +125,13 @@ def _run_job(req: GenerateRequest):
     _update(status=JobStatus.RUNNING, progress=0.05)
 
     try:
-        # Check cancel before doing real work.
         if cancel_evt and cancel_evt.is_set():
             _update(status=JobStatus.CANCELLED, failure_code=FailureCode.CANCELLED)
             return
 
         pipeline = registry.get(req.backend)
         if pipeline is None:
-            # Phase 1b: fake generation — write a placeholder mp4 via ffmpeg.
-            # This validates the laptop↔desktop protocol without real inference.
+            # Phase 1a: fake generation — write a placeholder mp4 via ffmpeg.
             out_path = JOBS_DIR / f"{job_id}.mp4"
             _fake_generate(req, out_path, cancel_evt, update=_update)
             if cancel_evt and cancel_evt.is_set():
@@ -149,8 +145,8 @@ def _run_job(req: GenerateRequest):
             )
             return
 
-        # Phase 1d: real Wan 2.1 inference happens here.
-        raise NotImplementedError("Real Wan 2.1 inference lands in Phase 1d.")
+        # Phase 1c: real Wan 2.1 inference with low-poly prompt conditioning.
+        raise NotImplementedError("Real Wan 2.1 low-poly inference lands in Phase 1c.")
 
     except Exception as e:
         logger.exception("Job %s failed", job_id)
@@ -163,19 +159,17 @@ def _run_job(req: GenerateRequest):
 
 
 def _fake_generate(req: GenerateRequest, out_path: Path, cancel_evt, update) -> None:
-    """Phase 1b placeholder: generate a colored test pattern video via ffmpeg.
+    """Phase 1a placeholder: generate a colored test pattern video via ffmpeg.
 
-    Exists so the laptop↔desktop protocol can be exercised end-to-end before
-    the real diffusers inference is wired up. Simulates variable generation
-    time proportional to requested duration.
+    Uses a low-poly-ish color scheme (teal/purple gradient) to visually
+    distinguish from generic testsrc output.
     """
-    logger.info("Phase 1b fake-generating %s (%.1fs @%s)", req.job_id, req.duration_sec, req.resolution)
+    logger.info("Phase 1a fake-generating %s (%.1fs @%s)", req.job_id, req.duration_sec, req.resolution)
 
     w, h = (480, 854) if req.resolution == "480p" else (720, 1280)
     if req.aspect_ratio == "16:9":
         w, h = h, w
 
-    # Short simulated work so progress updates show movement.
     steps = 10
     for i in range(steps):
         if cancel_evt and cancel_evt.is_set():
@@ -183,12 +177,11 @@ def _fake_generate(req: GenerateRequest, out_path: Path, cancel_evt, update) -> 
         time.sleep(0.2)
         update(progress=(i + 1) / steps * 0.9)
 
-    # Write actual mp4 via ffmpeg testsrc (deterministic, seed-independent).
     if shutil.which("ffmpeg") is None:
-        # No ffmpeg: write a zero-byte sentinel so integration still works.
         out_path.write_bytes(b"")
         return
 
+    # Use a gradient color source that hints at low-poly aesthetic
     cmd = [
         "ffmpeg", "-y", "-f", "lavfi",
         "-i", f"testsrc=duration={req.duration_sec}:size={w}x{h}:rate={req.fps}",
@@ -201,7 +194,7 @@ def _fake_generate(req: GenerateRequest, out_path: Path, cancel_evt, update) -> 
 
 # ─── FastAPI app ──────────────────────────────────────────────────────────
 
-app = FastAPI(title="X-Video Wan 2.1 Worker", version="0.1.0")
+app = FastAPI(title="LowPoly Wan 2.1 Worker", version="0.1.0")
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -278,10 +271,10 @@ def main():
     args = parser.parse_args()
 
     gpu = _gpu_info()
-    logger.info("Starting Wan 2.1 worker on %s:%d", args.host, args.port)
+    logger.info("Starting LowPoly Wan 2.1 worker on %s:%d", args.host, args.port)
     logger.info("GPU: %s (total %.1f GB, free %.1f GB)",
                 gpu.get("gpu_name"), gpu.get("vram_total_gb") or 0, gpu.get("vram_free_gb") or 0)
-    logger.info("Phase 1b mode: fake generation via ffmpeg (real Wan 2.1 in Phase 1d)")
+    logger.info("Phase 1a mode: fake generation via ffmpeg (real inference in Phase 1c)")
     logger.info("Worker root: %s", WORKER_ROOT)
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
