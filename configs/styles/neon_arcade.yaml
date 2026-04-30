@@ -1,0 +1,14 @@
+# Neon Arcade — retro gaming aesthetic with bright neon colors.
+
+name: neon_arcade
+description: "Retro arcade game aesthetic with neon glow"
+poly_density: low
+palette: neon
+lighting: backlit
+background: "dark space with neon glow"
+extra_tags:
+  - "retro arcade game style"
+  - "neon glow effect"
+  - "synthwave aesthetic"
+  - "80s retro futurism"
+  - "glowing geometric shapes"

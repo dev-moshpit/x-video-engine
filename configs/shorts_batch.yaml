@@ -1,0 +1,55 @@
+# Production Shorts batch configuration.
+# This is the operator surface. Non-operator knobs live in default.yaml.
+
+# Ship-grade presets. Operator CSVs can only reference these unless
+# --allow-backlog is explicitly passed. Backlog presets stay available
+# internally for research/tuning.
+ship_presets:
+  - crystal
+  - papercraft
+  - neon_arcade
+  - monument
+
+backlog_presets:
+  - wireframe             # subject good, background drifts soft — needs prompt tuning
+  - geometric_nature      # overlaps with crystal — needs differentiation
+
+# Motion profiles. Operator picks by name; internal zoom/pan numbers hidden.
+motion_profiles:
+  calm:
+    zoom_range: [1.00, 1.15]
+    pan_fraction: 0.08
+    default_duration_sec: 3.5
+    anim_mode: ken_burns
+  medium:
+    zoom_range: [1.00, 1.25]
+    pan_fraction: 0.15
+    default_duration_sec: 3.0
+    anim_mode: ken_burns
+  energetic:
+    zoom_range: [1.00, 1.35]
+    pan_fraction: 0.22
+    default_duration_sec: 2.5
+    anim_mode: ken_burns
+
+# Output layout.
+batch_output_root: "cache/batches"
+
+# Retry policy.
+retry:
+  max_attempts: 3
+  backoff_sec: [5, 15, 30]
+
+# Corrupt output detection thresholds.
+validation:
+  min_file_size_kb: 20        # mp4 below this is almost certainly broken
+  require_readable_frames: true
+
+# Defaults.
+defaults:
+  aspect_ratio: "9:16"
+  fps: 24
+  preset: crystal
+  motion: medium
+  seed: 42
+  variants: 1

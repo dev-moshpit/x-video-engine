@@ -1,0 +1,150 @@
+{
+  "name": "ai_facts",
+  "title": "AI Facts Shorts",
+  "description": "Bite-sized AI/tech facts with stylized visuals. The angle (mind-blowing, cautionary, curious, future) drives tone. Works best with crystalline networks, neon cyber grids, and abstract geometric brains.",
+
+  "allowed_presets": ["neon_arcade", "crystal", "monument", "papercraft"],
+  "default_preset": "neon_arcade",
+  "allowed_motion": ["calm", "medium", "energetic"],
+  "default_motion": "medium",
+  "default_duration": 3.0,
+  "default_aspect": "9:16",
+  "default_seeds": [7, 77, 808],
+
+  "required_columns": ["topic", "angle", "visual_subject"],
+  "optional_columns": ["id", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "ANGLE": {
+      "mind-blowing": {
+        "action": "pulsing with energy",
+        "environment": "complex glowing network of interconnected nodes",
+        "motion": "energetic",
+        "preset_hint": "neon_arcade",
+        "title_phrase": "This is wild",
+        "caption_line": "You probably haven't seen this yet.",
+        "hook_phrase": "Most people have no idea this is how it works."
+      },
+      "wholesome": {
+        "action": "softly floating",
+        "environment": "friendly abstract space with warm pastel clouds",
+        "motion": "calm",
+        "preset_hint": "crystal",
+        "title_phrase": "The nice side of AI",
+        "caption_line": "Not everything about AI has to feel cold.",
+        "hook_phrase": "This one made me smile."
+      },
+      "cautionary": {
+        "action": "slowly looming",
+        "environment": "deep dark space with red accent glow, sharp shadows",
+        "motion": "medium",
+        "preset_hint": "neon_arcade",
+        "title_phrase": "Worth thinking about",
+        "caption_line": "The part we don't talk about enough.",
+        "hook_phrase": "Pay attention to this one."
+      },
+      "curious": {
+        "action": "suspended, contemplating",
+        "environment": "abstract void with drifting particles, soft light",
+        "motion": "calm",
+        "preset_hint": "monument",
+        "title_phrase": "Strange but true",
+        "caption_line": "The question no one has fully answered.",
+        "hook_phrase": "Ever wondered about this?"
+      },
+      "future": {
+        "action": "gliding forward on a grid",
+        "environment": "sleek neon cyber grid, glowing horizon",
+        "motion": "energetic",
+        "preset_hint": "neon_arcade",
+        "title_phrase": "Where this is going",
+        "caption_line": "The shape of what's coming.",
+        "hook_phrase": "This is closer than you think."
+      },
+      "historical": {
+        "action": "standing timeless",
+        "environment": "vintage sepia-tinted abstract space",
+        "motion": "calm",
+        "preset_hint": "papercraft",
+        "title_phrase": "Before it was cool",
+        "caption_line": "The story people forgot.",
+        "hook_phrase": "The beginning most people miss."
+      }
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{ANGLE[angle].action}",
+    "environment": "{ANGLE[angle].environment}",
+    "preset": "{preset|ANGLE[angle].preset_hint}",
+    "motion": "{motion|ANGLE[angle].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "neon_arcade",
+    "motion": "medium",
+    "duration": "",
+    "aspect": "9:16",
+    "seeds": "7,77,808"
+  },
+
+  "additional_negative_prompt": [
+    "humans with faces",
+    "realistic people",
+    "text on screen",
+    "UI elements",
+    "user interface",
+    "code on screen",
+    "letters",
+    "typography",
+    "logos"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{topic}",
+      "shorts":  "{topic}",
+      "tiktok":  "{ANGLE[angle].hook_phrase}",
+      "reels":   "{ANGLE[angle].title_phrase}"
+    },
+    "caption_templates": {
+      "default": "{topic}\n\n{ANGLE[angle].caption_line}\n\n{cta}",
+      "shorts":  "{topic} \u2014 {ANGLE[angle].caption_line}",
+      "tiktok":  "{ANGLE[angle].hook_phrase}\n\n{topic}\n\n{cta}",
+      "reels":   "{topic}\n\n{ANGLE[angle].caption_line}"
+    },
+    "cta_pool": [
+      "Follow for more AI visuals.",
+      "Save this before it gets deleted.",
+      "Part 2 tomorrow.",
+      "Follow for daily AI explainers.",
+      "Subscribe for more."
+    ],
+    "base_hashtags": [
+      "#ai",
+      "#artificialintelligence",
+      "#futuretech",
+      "#shorts",
+      "#reels",
+      "#lowpoly",
+      "#tech"
+    ],
+    "dynamic_hashtags": {
+      "angle": {
+        "mind-blowing": ["#mindblown", "#didyouknow"],
+        "wholesome":    ["#wholesome"],
+        "cautionary":   ["#aisafety", "#ethics"],
+        "curious":      ["#curious", "#philosophy"],
+        "future":       ["#future", "#innovation"],
+        "historical":   ["#history", "#techhistory"]
+      }
+    },
+    "max_hashtags": 12
+  }
+}

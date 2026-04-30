@@ -1,0 +1,14 @@
+# Crystal — sharp translucent facets with cool-toned gradients.
+# The default low-poly preset.
+
+name: crystal
+description: "Sharp crystalline facets with translucent cool tones"
+poly_density: medium
+palette: pastel
+lighting: gradient
+background: "soft gradient sky"
+extra_tags:
+  - "crystalline structure"
+  - "translucent facets"
+  - "glass-like geometric surfaces"
+  - "cool blue and purple tones"

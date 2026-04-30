@@ -1,5 +1,5 @@
-"""Loopback smoke test — start the worker in a background thread on the
-laptop itself, then exercise the full router→worker→download path against
+"""Loopback smoke test -- start the worker in a background thread on the
+laptop itself, then exercise the full router->worker->download path against
 localhost. Proves the protocol without the 2080 being online.
 
 Run:
@@ -19,11 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "worker_runtime"))
 import uvicorn
 
 from xvideo.spec import BackendName, Mode, Priority, ShotPlan
-from xvideo.workers.wan21 import Wan21WorkerClient
+from xvideo.workers.wan21 import Wan21LowPolyClient
 
 
 def _start_worker_thread(port: int) -> threading.Thread:
-    from worker_runtime.wan21_worker import app   # noqa: E402
+    from worker_runtime.wan21_worker import app
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
 
@@ -32,7 +32,6 @@ def _start_worker_thread(port: int) -> threading.Thread:
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
-    # Wait for startup
     for _ in range(50):
         if server.started:
             break
@@ -42,10 +41,10 @@ def _start_worker_thread(port: int) -> threading.Thread:
 
 def main() -> int:
     port = 8765
-    print(f"  [BOOT] Starting worker on localhost:{port}")
+    print(f"  [BOOT] Starting low-poly worker on localhost:{port}")
     _start_worker_thread(port)
 
-    client = Wan21WorkerClient(
+    client = Wan21LowPolyClient(
         endpoint=f"http://127.0.0.1:{port}",
         timeout_sec=120,
         poll_interval_sec=0.3,
@@ -59,9 +58,10 @@ def main() -> int:
 
     shot = ShotPlan(
         shot_id="loopback_000",
-        backend=BackendName.WAN21_T2V,
+        backend=BackendName.WAN21_LOWPOLY,
         mode=Mode.T2V,
-        prompt="loopback smoke test",
+        prompt="low poly geometric fox, faceted triangular mesh, pastel colors, gradient lighting",
+        negative_prompt="photorealistic, smooth surfaces, organic textures",
         duration_sec=2.0,
         resolution="480p",
         fps=24,
@@ -91,6 +91,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    print("X-Video Engine — Loopback smoke test (laptop-only)")
-    print("-" * 50)
+    print("LowPoly Video Engine \u2014 Loopback smoke test (laptop-only)")
+    print("-" * 55)
     sys.exit(main())

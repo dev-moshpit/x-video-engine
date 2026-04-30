@@ -1,0 +1,153 @@
+{
+  "name": "music_visualizer",
+  "title": "Music Visualizer Loops",
+  "description": "Abstract, loopable low-poly visuals that pair with music tracks. Track mood drives subject behavior; energy drives motion; color bias hints at preset selection.",
+
+  "allowed_presets": ["neon_arcade", "crystal", "monument"],
+  "default_preset": "neon_arcade",
+  "allowed_motion": ["calm", "medium", "energetic"],
+  "default_motion": "medium",
+  "default_duration": 3.0,
+  "default_aspect": "9:16",
+  "default_seeds": [11, 111, 1111],
+
+  "required_columns": ["track_mood", "energy", "visual_subject"],
+  "optional_columns": ["id", "color_bias", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "MOOD": {
+      "dreamy": {
+        "action": "floating weightlessly",
+        "environment": "soft nebula drift, pastel gradient haze",
+        "title_phrase": "Dreamy drift",
+        "caption_line": "Pair with ambient and synth textures.",
+        "hook_phrase": "Headphones. Now."
+      },
+      "driving": {
+        "action": "pulsing forward with momentum",
+        "environment": "neon grid tunnel stretching to horizon",
+        "title_phrase": "Driving neon energy",
+        "caption_line": "Built for late-night synth and drum.",
+        "hook_phrase": "Put this one on full screen."
+      },
+      "melancholic": {
+        "action": "slowly drifting downward",
+        "environment": "misty rain-soaked abstract cityscape, cool blue tones",
+        "title_phrase": "Blue hours",
+        "caption_line": "A slower loop for a slower mood.",
+        "hook_phrase": "For the 2am listens."
+      },
+      "euphoric": {
+        "action": "bursting outward in every direction",
+        "environment": "rays of light, crystal explosion, warm glow",
+        "title_phrase": "Peak moment",
+        "caption_line": "The drop where everything opens up.",
+        "hook_phrase": "Save this for the drop."
+      },
+      "ambient": {
+        "action": "suspended still, barely moving",
+        "environment": "gentle abstract mist, soft ethereal light",
+        "title_phrase": "Suspended",
+        "caption_line": "Minimal motion, maximum mood.",
+        "hook_phrase": "Play on loop. Trust me."
+      },
+      "dark": {
+        "action": "slowly emerging from shadow",
+        "environment": "near-black void with deep purple accents",
+        "title_phrase": "From the dark",
+        "caption_line": "For the heavier side of the set.",
+        "hook_phrase": "For when the track goes dark."
+      }
+    },
+    "ENERGY": {
+      "low":    {"motion": "calm"},
+      "medium": {"motion": "medium"},
+      "high":   {"motion": "energetic"}
+    },
+    "COLOR": {
+      "warm":       {"preset_hint": "crystal"},
+      "cool":       {"preset_hint": "crystal"},
+      "neon":       {"preset_hint": "neon_arcade"},
+      "monochrome": {"preset_hint": "monument"},
+      "pastel":     {"preset_hint": "monument"}
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{MOOD[track_mood].action}",
+    "environment": "{MOOD[track_mood].environment}",
+    "preset": "{preset|COLOR[color_bias].preset_hint}",
+    "motion": "{motion|ENERGY[energy].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "neon_arcade",
+    "motion": "medium",
+    "duration": "",
+    "aspect": "9:16",
+    "seeds": "11,111,1111",
+    "color_bias": "neon"
+  },
+
+  "additional_negative_prompt": [
+    "humans",
+    "people",
+    "realistic faces",
+    "text",
+    "typography",
+    "logos",
+    "watermarks",
+    "words"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{MOOD[track_mood].title_phrase}",
+      "shorts":  "{MOOD[track_mood].title_phrase}",
+      "tiktok":  "{MOOD[track_mood].hook_phrase}",
+      "reels":   "{MOOD[track_mood].title_phrase}"
+    },
+    "caption_templates": {
+      "default": "{MOOD[track_mood].title_phrase}\n\n{MOOD[track_mood].caption_line}\n\n{cta}",
+      "shorts":  "{MOOD[track_mood].title_phrase} \u2014 {MOOD[track_mood].caption_line}",
+      "tiktok":  "{MOOD[track_mood].hook_phrase}\n\n{cta}",
+      "reels":   "{MOOD[track_mood].title_phrase}\n\n{MOOD[track_mood].caption_line}"
+    },
+    "cta_pool": [
+      "Headphones on.",
+      "Full screen for best vibe.",
+      "Follow for more loops.",
+      "Loop it."
+    ],
+    "base_hashtags": [
+      "#musicvisualizer",
+      "#loop",
+      "#audiovisual",
+      "#shorts",
+      "#reels",
+      "#lowpoly"
+    ],
+    "dynamic_hashtags": {
+      "track_mood": {
+        "dreamy":       ["#ambient", "#dreampop"],
+        "driving":      ["#synthwave", "#electronic"],
+        "melancholic":  ["#lofi", "#chillbeats"],
+        "euphoric":     ["#edm", "#drop"],
+        "ambient":      ["#ambient", "#chill"],
+        "dark":         ["#darkwave", "#industrial"]
+      },
+      "energy": {
+        "low":    ["#chill"],
+        "medium": ["#vibe"],
+        "high":   ["#bassheavy", "#dance"]
+      }
+    },
+    "max_hashtags": 12
+  }
+}

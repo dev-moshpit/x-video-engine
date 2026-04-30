@@ -1,0 +1,14 @@
+# Papercraft — folded paper aesthetic with visible creases and warm tones.
+
+name: papercraft
+description: "Folded paper art with visible creases and warm palette"
+poly_density: low
+palette: earth
+lighting: flat
+background: "craft paper texture"
+extra_tags:
+  - "paper craft style"
+  - "folded paper art"
+  - "visible creases and folds"
+  - "handmade cardboard look"
+  - "matte paper texture"

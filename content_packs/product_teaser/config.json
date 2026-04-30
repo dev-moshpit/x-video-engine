@@ -1,0 +1,167 @@
+{
+  "name": "product_teaser",
+  "title": "Product Teaser Shorts",
+  "description": "Premium-looking abstract promo clips for any product. Category drives preset (tech → neon_arcade, fashion → monument, etc.); vibe drives the cinematic tone and reveal behavior. Built for sellable clips with restrained, commercial copy — not meme-bait.",
+
+  "allowed_presets": ["crystal", "monument", "neon_arcade", "papercraft"],
+  "default_preset": "crystal",
+  "allowed_motion": ["calm", "medium"],
+  "default_motion": "medium",
+  "default_duration": 3.0,
+  "default_aspect": "9:16",
+  "default_seeds": [3, 33, 333],
+
+  "required_columns": ["product", "category", "vibe", "visual_subject"],
+  "optional_columns": ["id", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "CATEGORY": {
+      "tech":        {"preset_hint": "neon_arcade", "caption_angle": "Precision engineering."},
+      "beauty":      {"preset_hint": "crystal",     "caption_angle": "Designed to feel like a ritual."},
+      "home":        {"preset_hint": "papercraft",  "caption_angle": "Where warmth meets design."},
+      "fashion":     {"preset_hint": "monument",    "caption_angle": "A silhouette worth noticing."},
+      "food":        {"preset_hint": "papercraft",  "caption_angle": "Small moments, big flavor."},
+      "fitness":     {"preset_hint": "neon_arcade", "caption_angle": "Built for the next rep."},
+      "luxury":      {"preset_hint": "monument",    "caption_angle": "For those who already know."},
+      "saas":        {"preset_hint": "neon_arcade", "caption_angle": "Built for people who ship."},
+      "accessory":   {"preset_hint": "crystal",     "caption_angle": "The detail that makes the look."},
+      "gadget":      {"preset_hint": "neon_arcade", "caption_angle": "Tech that actually feels new."}
+    },
+    "VIBE": {
+      "elegant": {
+        "action": "floating elegantly on a pedestal",
+        "environment": "soft spotlight, marble-like pastel gradient",
+        "motion": "calm",
+        "title_prefix": "Introducing",
+        "hook_phrase": "It's not just a product. It's a feeling.",
+        "reveal_phrase": "Arriving now."
+      },
+      "bold": {
+        "action": "emerging dramatically from shadow",
+        "environment": "high-contrast backdrop, single hero light",
+        "motion": "medium",
+        "title_prefix": "Meet",
+        "hook_phrase": "Loud enough to notice. Refined enough to want.",
+        "reveal_phrase": "Now available."
+      },
+      "playful": {
+        "action": "spinning gently in open space",
+        "environment": "bright airy gradient, soft color blocks",
+        "motion": "medium",
+        "title_prefix": "Say hello to",
+        "hook_phrase": "Fun was part of the brief.",
+        "reveal_phrase": "Yours to grab."
+      },
+      "premium": {
+        "action": "rotating with precision on a dark pedestal",
+        "environment": "gallery spotlight, deep warm shadows",
+        "motion": "calm",
+        "title_prefix": "Presenting",
+        "hook_phrase": "Designed without compromise.",
+        "reveal_phrase": "Limited drop."
+      },
+      "clean": {
+        "action": "suspended still in minimal space",
+        "environment": "clean cream gradient, soft ambient light",
+        "motion": "calm",
+        "title_prefix": "Meet",
+        "hook_phrase": "Less, done properly.",
+        "reveal_phrase": "Available now."
+      },
+      "cinematic": {
+        "action": "revealing slowly, camera arcing around",
+        "environment": "dramatic cinematic backdrop, volumetric light",
+        "motion": "medium",
+        "title_prefix": "The new",
+        "hook_phrase": "Made to be seen.",
+        "reveal_phrase": "Watch the full reveal."
+      }
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{VIBE[vibe].action}",
+    "environment": "{VIBE[vibe].environment}",
+    "preset": "{preset|CATEGORY[category].preset_hint}",
+    "motion": "{motion|VIBE[vibe].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "crystal",
+    "motion": "medium",
+    "duration": "",
+    "aspect": "9:16",
+    "seeds": "3,33,333"
+  },
+
+  "additional_negative_prompt": [
+    "text on screen",
+    "typography",
+    "captions",
+    "words",
+    "letters",
+    "price tags",
+    "logos",
+    "watermarks",
+    "realistic human hands",
+    "stock photo aesthetic"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{VIBE[vibe].title_prefix} {product}",
+      "shorts":  "{VIBE[vibe].title_prefix} {product}",
+      "tiktok":  "{VIBE[vibe].hook_phrase}",
+      "reels":   "{VIBE[vibe].title_prefix} {product}"
+    },
+    "caption_templates": {
+      "default": "{VIBE[vibe].title_prefix} {product}.\n\n{CATEGORY[category].caption_angle}\n\n{VIBE[vibe].reveal_phrase} {cta}",
+      "shorts":  "{VIBE[vibe].title_prefix} {product} — {CATEGORY[category].caption_angle}",
+      "tiktok":  "{VIBE[vibe].hook_phrase}\n\n{product}. {VIBE[vibe].reveal_phrase}\n\n{cta}",
+      "reels":   "{product}\n\n{CATEGORY[category].caption_angle}\n\n{VIBE[vibe].reveal_phrase}"
+    },
+    "cta_pool": [
+      "Link in bio.",
+      "Shop the drop.",
+      "Tap to learn more.",
+      "Available now.",
+      "Pre-order open."
+    ],
+    "base_hashtags": [
+      "#shorts",
+      "#reels",
+      "#newdrop",
+      "#lowpoly",
+      "#productdesign"
+    ],
+    "dynamic_hashtags": {
+      "category": {
+        "tech":      ["#tech", "#innovation"],
+        "beauty":    ["#beauty", "#skincare"],
+        "home":      ["#homedecor", "#interiors"],
+        "fashion":   ["#fashion", "#style"],
+        "food":      ["#foodie", "#gourmet"],
+        "fitness":   ["#fitness", "#training"],
+        "luxury":    ["#luxury", "#premium"],
+        "saas":      ["#saas", "#startup"],
+        "accessory": ["#accessories"],
+        "gadget":    ["#gadgets", "#tech"]
+      },
+      "vibe": {
+        "elegant":   ["#elegant"],
+        "bold":      ["#bold"],
+        "playful":   ["#fun"],
+        "premium":   ["#premium"],
+        "clean":     ["#minimal"],
+        "cinematic": ["#cinematic"]
+      }
+    },
+    "max_hashtags": 10
+  }
+}

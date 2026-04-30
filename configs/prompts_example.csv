@@ -1,0 +1,9 @@
+id,subject,action,environment,preset,motion,duration,aspect,seeds
+fox_calm,a geometric fox,sitting alert,low poly forest,crystal,calm,,9:16,42
+fox_energetic,a geometric fox,running through snow,triangulated pine trees,crystal,energetic,,9:16,"42,137,2024"
+village_cozy,a cozy paper cottage,,rolling hills at dawn,papercraft,calm,,9:16,"7,77"
+castle_pop,a medieval castle,,hilltop at sunset,papercraft,medium,,9:16,501
+neon_lambo,a sports car,driving,neon city street at night,neon_arcade,energetic,,9:16,"1,2,3"
+neon_runner,a cyber runner,sprinting,retro grid plane,neon_arcade,energetic,,9:16,808
+staircase,an impossible floating staircase,,abstract pastel space,monument,calm,,9:16,"11,111"
+tower,an impossible floating tower,,soft gradient sky,monument,medium,,9:16,909

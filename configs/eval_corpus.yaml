@@ -1,0 +1,131 @@
+# LowPoly Video Engine — Evaluation corpus.
+# Fixed set of prompts across presets, lanes, and seeds for calibration.
+#
+# Usage: python scripts/eval_lowpoly_corpus.py
+#
+# Each entry is a (subject, action, environment, preset) tuple.
+# The harness runs every entry across all render lanes and 2-3 seeds.
+
+prompts:
+  # ─── Animals (core low-poly subject) ──────────────────────────────────
+  - subject: "a geometric fox"
+    action: "running through snow"
+    environment: "low poly forest"
+    presets: [crystal, papercraft, geometric_nature]
+
+  - subject: "a low poly deer"
+    action: "standing alert"
+    environment: "misty clearing"
+    presets: [crystal, geometric_nature]
+
+  - subject: "a faceted eagle"
+    action: "soaring"
+    environment: "mountain peaks"
+    presets: [crystal, wireframe]
+
+  - subject: "a geometric wolf"
+    action: "howling"
+    environment: "snowy ridge at night"
+    presets: [crystal, neon_arcade, wireframe]
+
+  # ─── Landscapes ────────────────────────────────────────────────────────
+  - subject: "a mountain landscape"
+    action: "slowly rotating"
+    environment: "sunset sky with clouds"
+    presets: [crystal, geometric_nature, papercraft]
+
+  - subject: "an island"
+    action: "floating in sky"
+    environment: "abstract void"
+    presets: [crystal, monument]
+
+  - subject: "a waterfall"
+    action: "flowing"
+    environment: "tropical canyon"
+    presets: [geometric_nature, crystal]
+
+  # ─── Architecture / Objects ────────────────────────────────────────────
+  - subject: "a medieval castle"
+    action: ""
+    environment: "hilltop at dawn"
+    presets: [crystal, papercraft, monument]
+
+  - subject: "an impossible staircase"
+    action: ""
+    environment: "abstract pastel space"
+    presets: [monument]
+
+  - subject: "a japanese torii gate"
+    action: ""
+    environment: "zen garden"
+    presets: [crystal, papercraft]
+
+  - subject: "a lighthouse"
+    action: ""
+    environment: "rocky coastline"
+    presets: [crystal, geometric_nature]
+
+  # ─── Characters / Figures ──────────────────────────────────────────────
+  - subject: "a geometric astronaut"
+    action: "floating"
+    environment: "outer space with stars"
+    presets: [wireframe, neon_arcade, crystal]
+
+  - subject: "a samurai warrior"
+    action: "standing in wind"
+    environment: "bamboo forest"
+    presets: [crystal, papercraft]
+
+  - subject: "a robot"
+    action: "walking forward"
+    environment: "neon city street"
+    presets: [wireframe, neon_arcade]
+
+  # ─── Vehicles ──────────────────────────────────────────────────────────
+  - subject: "a sports car"
+    action: "driving"
+    environment: "desert highway"
+    presets: [crystal, neon_arcade]
+
+  - subject: "a sailing ship"
+    action: "on calm ocean"
+    environment: "sunset horizon"
+    presets: [papercraft, crystal]
+
+  # ─── Abstract / Stress tests ───────────────────────────────────────────
+  - subject: "abstract geometric shapes"
+    action: "morphing and rotating"
+    environment: "dark void"
+    presets: [wireframe, neon_arcade, crystal]
+
+  - subject: "a crystal formation"
+    action: "growing"
+    environment: "cave interior"
+    presets: [crystal]
+
+  - subject: "neon particles"
+    action: "swirling"
+    environment: "black background"
+    presets: [neon_arcade, wireframe]
+
+  # ─── Known hard cases (photoreal leak risk) ────────────────────────────
+  - subject: "a human face"
+    action: "turning slowly"
+    environment: "neutral background"
+    presets: [crystal, papercraft]
+
+  - subject: "a photorealistic car"
+    action: "driving on highway"
+    environment: "realistic cityscape"
+    presets: [crystal, wireframe]
+
+  - subject: "a forest path"
+    action: ""
+    environment: "dense trees with sunlight"
+    presets: [geometric_nature, crystal]
+
+# Seeds to test per entry. More seeds = better statistics, slower run.
+seeds: [42, 137, 2024]
+
+# Lanes to test. All entries run through each lane.
+lanes: [preview, standard, fidelity]

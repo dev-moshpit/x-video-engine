@@ -1,0 +1,142 @@
+{
+  "name": "motivational_quotes",
+  "title": "Motivational Quote Shorts",
+  "description": "Pair a short quote with a stylized low-poly subject whose posture and environment reinforce the emotional tone. Typography is rendered later as an overlay; the engine generates clean visuals without on-screen text.",
+
+  "allowed_presets": ["crystal", "monument", "papercraft"],
+  "default_preset": "crystal",
+  "allowed_motion": ["calm", "medium"],
+  "default_motion": "calm",
+  "default_duration": 3.5,
+  "default_aspect": "9:16",
+  "default_seeds": [42, 137, 2024],
+
+  "required_columns": ["quote", "tone", "visual_subject"],
+  "optional_columns": ["id", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "TONE": {
+      "reflective": {
+        "action": "standing still, glowing softly",
+        "environment": "serene pastel mist, soft sunrise gradient",
+        "motion": "calm",
+        "title_phrase": "A quiet reminder",
+        "caption_line": "Slow down. Notice. Breathe.",
+        "hook_phrase": "Some days you just need this reminder."
+      },
+      "triumphant": {
+        "action": "rising into the light, arms outstretched",
+        "environment": "dramatic sky with rays of sun, mountain peak",
+        "motion": "medium",
+        "title_phrase": "Your moment is now",
+        "caption_line": "You earned this climb.",
+        "hook_phrase": "This one is for the grinders."
+      },
+      "peaceful": {
+        "action": "drifting gently",
+        "environment": "soft floating clouds, warm gradient horizon",
+        "motion": "calm",
+        "title_phrase": "Find your calm",
+        "caption_line": "Stillness is a kind of strength.",
+        "hook_phrase": "Save this for a hard day."
+      },
+      "fierce": {
+        "action": "charging forward with intent",
+        "environment": "storm clouds breaking open, distant ridge",
+        "motion": "medium",
+        "title_phrase": "No way but forward",
+        "caption_line": "Discipline is freedom.",
+        "hook_phrase": "Watch this before your next decision."
+      },
+      "grateful": {
+        "action": "open stance, looking upward",
+        "environment": "golden hour warm gradient, soft glow",
+        "motion": "calm",
+        "title_phrase": "A moment of gratitude",
+        "caption_line": "Everything you have was once something you hoped for.",
+        "hook_phrase": "Sit with this one for a second."
+      },
+      "resilient": {
+        "action": "holding ground against wind",
+        "environment": "sparse rocky plateau, clearing sky",
+        "motion": "medium",
+        "title_phrase": "Still standing",
+        "caption_line": "You bend; you don't break.",
+        "hook_phrase": "For anyone rebuilding right now."
+      }
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{TONE[tone].action}",
+    "environment": "{TONE[tone].environment}",
+    "preset": "{preset|default}",
+    "motion": "{motion|TONE[tone].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "crystal",
+    "motion": "calm",
+    "duration": "",
+    "aspect": "9:16",
+    "seeds": "42,137,2024"
+  },
+
+  "additional_negative_prompt": [
+    "text on screen",
+    "typography",
+    "words",
+    "letters",
+    "captions",
+    "logos",
+    "signatures",
+    "watermarks"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{TONE[tone].title_phrase}",
+      "shorts":  "{TONE[tone].title_phrase}",
+      "tiktok":  "{TONE[tone].hook_phrase}",
+      "reels":   "{TONE[tone].title_phrase}"
+    },
+    "caption_templates": {
+      "default": "{quote}\n\n{TONE[tone].caption_line}\n\n{cta}",
+      "shorts":  "{quote}\n\n{TONE[tone].caption_line}",
+      "tiktok":  "{TONE[tone].hook_phrase}\n\n\"{quote}\"\n\n{cta}",
+      "reels":   "\"{quote}\"\n\n{TONE[tone].caption_line}"
+    },
+    "cta_pool": [
+      "Save this for later.",
+      "Keep going.",
+      "Tag someone who needs this.",
+      "Follow for more daily reminders.",
+      "Hit follow for more."
+    ],
+    "base_hashtags": [
+      "#motivation",
+      "#mindset",
+      "#shorts",
+      "#reels",
+      "#lowpoly",
+      "#dailymotivation"
+    ],
+    "dynamic_hashtags": {
+      "tone": {
+        "reflective": ["#mindfulness", "#reflection"],
+        "triumphant": ["#win", "#growth", "#success"],
+        "peaceful":   ["#calm", "#peace"],
+        "fierce":     ["#discipline", "#grind", "#nevergiveup"],
+        "grateful":   ["#gratitude", "#thankful"],
+        "resilient":  ["#resilience", "#strong"]
+      }
+    },
+    "max_hashtags": 12
+  }
+}

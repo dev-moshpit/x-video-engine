@@ -1,0 +1,13 @@
+# Wireframe — visible triangle edges on dark background. Technical aesthetic.
+
+name: wireframe
+description: "Visible polygon wireframe on dark background"
+poly_density: high
+palette: neon
+lighting: backlit
+background: "dark void black background"
+extra_tags:
+  - "visible wireframe edges"
+  - "glowing polygon outlines"
+  - "technical 3d mesh visualization"
+  - "neon edge highlights on black"

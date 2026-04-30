@@ -1,0 +1,163 @@
+{
+  "name": "abstract_loop",
+  "title": "Abstract Loops",
+  "description": "Volume-oriented aesthetic filler. Loopable, text-free, music-ready low-poly visuals keyed by mood + color theme. Made for mood pages, ambient backdrops, between-post filler, and stitching into longer vertical compilations.",
+
+  "allowed_presets": ["crystal", "monument", "neon_arcade"],
+  "default_preset": "crystal",
+  "allowed_motion": ["calm", "medium"],
+  "default_motion": "calm",
+  "default_duration": 2.5,
+  "default_aspect": "9:16",
+  "default_seeds": [1, 2, 3, 4],
+
+  "required_columns": ["mood", "color_theme", "visual_subject"],
+  "optional_columns": ["id", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "MOOD": {
+      "dreamy": {
+        "action": "floating weightlessly",
+        "environment": "soft nebula drift, pastel gradient haze",
+        "motion": "calm",
+        "title_phrase": "Drift",
+        "caption_line": "Lo-fi vibe, endless loop."
+      },
+      "sharp": {
+        "action": "pulsing rhythmically",
+        "environment": "sharp neon grid, sparse light",
+        "motion": "medium",
+        "title_phrase": "Pulse",
+        "caption_line": "Hard edges, clean rhythm."
+      },
+      "serene": {
+        "action": "barely drifting",
+        "environment": "quiet horizon, soft gradient light",
+        "motion": "calm",
+        "title_phrase": "Stillness",
+        "caption_line": "Built for deep focus."
+      },
+      "ethereal": {
+        "action": "glowing softly, suspended",
+        "environment": "luminous fog, delicate pastel mist",
+        "motion": "calm",
+        "title_phrase": "Glow",
+        "caption_line": "Ambient and weightless."
+      },
+      "rhythmic": {
+        "action": "looping in steady pulse",
+        "environment": "clean abstract space with subtle beat-like rings",
+        "motion": "medium",
+        "title_phrase": "Cycle",
+        "caption_line": "Made to pair with any beat."
+      },
+      "chaotic": {
+        "action": "swirling in controlled chaos",
+        "environment": "bold color blocks colliding",
+        "motion": "medium",
+        "title_phrase": "Chaos",
+        "caption_line": "Tension, on loop."
+      },
+      "melancholic": {
+        "action": "slowly descending",
+        "environment": "cool blue mist, soft rain particles",
+        "motion": "calm",
+        "title_phrase": "Weight",
+        "caption_line": "A loop for the slower tracks."
+      }
+    },
+    "COLOR": {
+      "pastel":  {"preset_hint": "crystal"},
+      "neon":    {"preset_hint": "neon_arcade"},
+      "mono":    {"preset_hint": "monument"},
+      "warm":    {"preset_hint": "crystal"},
+      "cool":    {"preset_hint": "monument"},
+      "sunset":  {"preset_hint": "crystal"},
+      "deep":    {"preset_hint": "monument"}
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{MOOD[mood].action}",
+    "environment": "{MOOD[mood].environment}",
+    "preset": "{preset|COLOR[color_theme].preset_hint}",
+    "motion": "{motion|MOOD[mood].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "crystal",
+    "motion": "calm",
+    "duration": "2.5",
+    "aspect": "9:16",
+    "seeds": "1,2,3,4"
+  },
+
+  "additional_negative_prompt": [
+    "humans",
+    "people",
+    "realistic faces",
+    "recognizable characters",
+    "text",
+    "typography",
+    "logos",
+    "watermarks",
+    "brand names"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{MOOD[mood].title_phrase}",
+      "shorts":  "{MOOD[mood].title_phrase}",
+      "tiktok":  "{MOOD[mood].title_phrase} loop",
+      "reels":   "{MOOD[mood].title_phrase}"
+    },
+    "caption_templates": {
+      "default": "{MOOD[mood].title_phrase}\n\n{MOOD[mood].caption_line}\n\n{cta}",
+      "shorts":  "{MOOD[mood].title_phrase} — {MOOD[mood].caption_line}",
+      "tiktok":  "{MOOD[mood].title_phrase} loop\n\n{cta}",
+      "reels":   "{MOOD[mood].title_phrase}\n\n{MOOD[mood].caption_line}"
+    },
+    "cta_pool": [
+      "Loop it.",
+      "Full screen for best vibe.",
+      "Pair with any track.",
+      "More loops daily.",
+      "Follow for more."
+    ],
+    "base_hashtags": [
+      "#aesthetic",
+      "#loop",
+      "#lowpoly",
+      "#shorts",
+      "#reels",
+      "#visuals"
+    ],
+    "dynamic_hashtags": {
+      "mood": {
+        "dreamy":       ["#dreamy", "#chill"],
+        "sharp":        ["#synthwave"],
+        "serene":       ["#calm", "#focus"],
+        "ethereal":     ["#ambient"],
+        "rhythmic":     ["#rhythm"],
+        "chaotic":      ["#energy"],
+        "melancholic":  ["#lofi", "#sad"]
+      },
+      "color_theme": {
+        "pastel":  ["#pastel"],
+        "neon":    ["#neon"],
+        "mono":    ["#minimal"],
+        "warm":    ["#warmtones"],
+        "cool":    ["#cooltones"],
+        "sunset":  ["#sunset"],
+        "deep":    ["#dark"]
+      }
+    },
+    "max_hashtags": 10
+  }
+}

@@ -1,0 +1,14 @@
+# Monument — inspired by Monument Valley. Isometric, impossible geometry, pastel.
+
+name: monument
+description: "Monument Valley inspired isometric impossible geometry"
+poly_density: medium
+palette: pastel
+lighting: ambient_occlusion
+background: "soft sky gradient"
+extra_tags:
+  - "isometric perspective"
+  - "impossible architecture"
+  - "monument valley style"
+  - "pastel geometric buildings"
+  - "M.C. Escher inspired"

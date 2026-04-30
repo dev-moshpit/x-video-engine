@@ -1,0 +1,160 @@
+{
+  "name": "history_mystery",
+  "title": "History & Mystery Shorts",
+  "description": "Hook-driven shorts about unsolved mysteries, lost history, and eerie unexplained events. Stylized symbolic low-poly visuals — artifacts, silhouettes, ruins, shadowy figures — paired with narrative voiceover.",
+
+  "allowed_presets": ["monument", "papercraft", "crystal"],
+  "default_preset": "monument",
+  "allowed_motion": ["calm", "medium"],
+  "default_motion": "calm",
+  "default_duration": 3.5,
+  "default_aspect": "9:16",
+  "default_seeds": [13, 77, 1947],
+
+  "required_columns": ["topic", "mystery_angle", "visual_subject"],
+  "optional_columns": ["id", "preset", "motion", "duration", "seeds"],
+
+  "tables": {
+    "ANGLE": {
+      "unsolved": {
+        "action": "sitting in silent stillness",
+        "environment": "dim atmospheric fog, eerie diffused light",
+        "motion": "calm",
+        "preset_hint": "monument",
+        "title_phrase": "Still unsolved",
+        "caption_line": "Decades later, we still don't know what really happened.",
+        "hook_phrase": "No one has ever explained this."
+      },
+      "forgotten": {
+        "action": "slowly weathered by time",
+        "environment": "dusty sepia backdrop, drifting particles",
+        "motion": "calm",
+        "preset_hint": "papercraft",
+        "title_phrase": "The story they buried",
+        "caption_line": "History almost let this one vanish.",
+        "hook_phrase": "Most people never learned this existed."
+      },
+      "conspiracy": {
+        "action": "hidden in shadow",
+        "environment": "dark tunnel with a single flickering light",
+        "motion": "medium",
+        "preset_hint": "monument",
+        "title_phrase": "What they didn't want you to see",
+        "caption_line": "The version that stayed off the record.",
+        "hook_phrase": "The official story doesn't add up."
+      },
+      "lost_civilization": {
+        "action": "standing timeless under ancient sky",
+        "environment": "ancient stone ruins silhouettes, drifting clouds",
+        "motion": "calm",
+        "preset_hint": "monument",
+        "title_phrase": "They were here first",
+        "caption_line": "The culture that shaped us — and then disappeared.",
+        "hook_phrase": "They were advanced. Then gone."
+      },
+      "eerie": {
+        "action": "barely moving in dead stillness",
+        "environment": "foggy moonlight, cold blue tones",
+        "motion": "calm",
+        "preset_hint": "crystal",
+        "title_phrase": "Nobody has ever explained this",
+        "caption_line": "The kind of story you don't forget.",
+        "hook_phrase": "If this is real, it changes things."
+      },
+      "cover_up": {
+        "action": "emerging from deep shadow",
+        "environment": "deep shadows, single harsh light, high contrast",
+        "motion": "medium",
+        "preset_hint": "monument",
+        "title_phrase": "The cover-up finally cracking",
+        "caption_line": "They had reasons to keep this quiet.",
+        "hook_phrase": "The files finally opened last year."
+      },
+      "haunted": {
+        "action": "standing silent in empty space",
+        "environment": "abandoned architectural silhouette, faint fog",
+        "motion": "calm",
+        "preset_hint": "monument",
+        "title_phrase": "Abandoned, but not empty",
+        "caption_line": "The locals stopped going there years ago.",
+        "hook_phrase": "Nobody lives near here anymore."
+      }
+    }
+  },
+
+  "row_transformer": {
+    "id": "{id|default}",
+    "subject": "{visual_subject}",
+    "action": "{ANGLE[mystery_angle].action}",
+    "environment": "{ANGLE[mystery_angle].environment}",
+    "preset": "{preset|ANGLE[mystery_angle].preset_hint}",
+    "motion": "{motion|ANGLE[mystery_angle].motion}",
+    "duration": "{duration|default}",
+    "aspect": "{aspect|default}",
+    "seeds": "{seeds|default}"
+  },
+
+  "defaults": {
+    "id": "",
+    "preset": "monument",
+    "motion": "calm",
+    "duration": "",
+    "aspect": "9:16",
+    "seeds": "13,77,1947"
+  },
+
+  "additional_negative_prompt": [
+    "realistic human faces",
+    "identifiable people",
+    "modern smartphones",
+    "modern cars",
+    "text on screen",
+    "typography",
+    "watermarks",
+    "blood",
+    "graphic violence",
+    "gore"
+  ],
+
+  "publish": {
+    "title_templates": {
+      "default": "{ANGLE[mystery_angle].title_phrase}: {topic}",
+      "shorts":  "{topic}",
+      "tiktok":  "{ANGLE[mystery_angle].hook_phrase}",
+      "reels":   "{ANGLE[mystery_angle].title_phrase}"
+    },
+    "caption_templates": {
+      "default": "{topic}\n\n{ANGLE[mystery_angle].caption_line}\n\n{cta}",
+      "shorts":  "{topic} — {ANGLE[mystery_angle].caption_line}",
+      "tiktok":  "{ANGLE[mystery_angle].hook_phrase}\n\n{topic}\n\n{cta}",
+      "reels":   "{topic}\n\n{ANGLE[mystery_angle].caption_line}"
+    },
+    "cta_pool": [
+      "Follow for part 2.",
+      "Save this thread.",
+      "The full story tomorrow.",
+      "Part 2 drops next.",
+      "Comment theories below."
+    ],
+    "base_hashtags": [
+      "#history",
+      "#mystery",
+      "#shorts",
+      "#reels",
+      "#lowpoly",
+      "#unexplained"
+    ],
+    "dynamic_hashtags": {
+      "mystery_angle": {
+        "unsolved":          ["#unsolved", "#coldcase"],
+        "forgotten":         ["#forgottenhistory", "#historyfacts"],
+        "conspiracy":        ["#conspiracy", "#truthseekers"],
+        "lost_civilization": ["#ancientcivilizations", "#archaeology"],
+        "eerie":             ["#creepy", "#paranormal"],
+        "cover_up":          ["#coverup", "#declassified"],
+        "haunted":           ["#haunted", "#abandoned"]
+      }
+    },
+    "max_hashtags": 12
+  }
+}

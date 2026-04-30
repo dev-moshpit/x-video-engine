@@ -1,4 +1,4 @@
-"""Phase 1d smoke test — laptop dispatches to 2080 worker over LAN.
+"""Phase 1c smoke test -- laptop dispatches to 2080 worker over LAN.
 
 Usage from the laptop:
     # 1. Start the worker on the 2080 desktop:
@@ -9,17 +9,6 @@ Usage from the laptop:
     #
     # 3. Run this script:
     #    python scripts/run_lan_smoke.py
-
-This test:
-    1. Loads router config (or uses env override)
-    2. Pings the worker health endpoint
-    3. Submits a Wan 2.1 T2V job
-    4. Polls until done
-    5. Downloads the result .mp4
-    6. Prints the local path + file size
-
-Phase 1b worker returns an ffmpeg testsrc video (fake). Phase 1d swaps in
-real Wan 2.1 inference.
 """
 
 from __future__ import annotations
@@ -44,7 +33,7 @@ def _patch_endpoint_from_env(config_path: Path) -> Path:
 
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
-    cfg.setdefault("workers", {}).setdefault("wan21_t2v", {})["endpoint"] = endpoint
+    cfg.setdefault("workers", {}).setdefault("wan21_lowpoly", {})["endpoint"] = endpoint
 
     override_path = config_path.parent / "backends.local.yaml"
     with open(override_path, "w") as f:
@@ -61,25 +50,27 @@ def main():
     available = router.available_backends()
     print(f"  [INFO] Registered clients: {[b.value for b in available]}")
 
-    if BackendName.WAN21_T2V not in available:
-        print("  [SKIP] Wan 2.1 worker not configured. Set endpoint in configs/backends.yaml")
+    if BackendName.WAN21_LOWPOLY not in available:
+        print("  [SKIP] Low-poly worker not configured. Set endpoint in configs/backends.yaml")
         print("         or export XVIDEO_WAN21_ENDPOINT=http://<2080-lan-ip>:8080")
         return 0
 
-    # 1. Health check
     health = router.health_check()
     print(f"  [HEALTH] {health}")
-    if not health.get(BackendName.WAN21_T2V.value):
+    if not health.get(BackendName.WAN21_LOWPOLY.value):
         print("  [FAIL] Worker health check failed. Is the FastAPI service running?")
         return 1
 
-    # 2. Dispatch a single shot
     shot = ShotPlan(
         shot_id="lan_smoke_000",
-        backend=BackendName.WAN21_T2V,
+        backend=BackendName.WAN21_LOWPOLY,
         mode=Mode.T2V,
-        prompt="a lone silhouette walking through neon-lit rain, cinematic",
-        negative_prompt="blurry, low quality, watermark",
+        prompt=(
+            "low poly 3d render, faceted geometric fox running through snow, "
+            "triangulated pine trees, pastel color palette, gradient lighting, "
+            "stylized minimalist, clean geometric edges"
+        ),
+        negative_prompt="photorealistic, smooth surfaces, organic textures, blurry, watermark",
         duration_sec=3.0,
         resolution="480p",
         fps=24,
@@ -106,6 +97,6 @@ def main():
 
 
 if __name__ == "__main__":
-    print("X-Video Engine — Phase 1d LAN smoke test")
-    print("-" * 50)
+    print("LowPoly Video Engine \u2014 Phase 1c LAN smoke test")
+    print("-" * 55)
     sys.exit(main())

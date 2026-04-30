@@ -1,0 +1,11 @@
+id,track_mood,energy,color_bias,visual_subject,preset,motion,duration,seeds
+mv_dream_crystals,dreamy,low,cool,floating translucent crystal shards,,,,
+mv_drive_tunnel,driving,high,neon,a pulsing neon tunnel,,,,
+mv_melanch_rain,melancholic,low,cool,a lone floating cube in rain,,,,
+mv_euphoric_burst,euphoric,high,warm,a bursting crystal explosion,,,,
+mv_ambient_mist,ambient,low,pastel,abstract drifting geometric shapes,,,,
+mv_dark_monolith,dark,medium,monochrome,a slowly rising black monolith,monument,,,
+mv_drive_spires,driving,medium,neon,a grid of neon spires,,,,
+mv_dream_clouds,dreamy,low,pastel,faceted cloud forms adrift,,,,
+mv_euphoric_stars,euphoric,high,neon,bursts of neon stars,,,,
+mv_ambient_ring,ambient,low,monochrome,a single glowing geometric ring,,,,

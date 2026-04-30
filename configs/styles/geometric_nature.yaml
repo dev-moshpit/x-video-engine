@@ -1,0 +1,13 @@
+# Geometric Nature — organic subjects rendered in geometric faceted style.
+
+name: geometric_nature
+description: "Nature scenes with bold geometric faceted rendering"
+poly_density: medium
+palette: earth
+lighting: dramatic
+background: "natural landscape backdrop"
+extra_tags:
+  - "geometric nature"
+  - "faceted organic forms"
+  - "triangulated landscape"
+  - "bold angular terrain"
