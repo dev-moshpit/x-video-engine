@@ -149,7 +149,7 @@ def test_probe_all_models_returns_one_per_spec():
     # We at least know about these — adding more is fine.
     expected_subset = {
         "faster_whisper_base",
-        "sdxl_base",
+        "sdxl_turbo",
         "svd",
         "wan21",
         "hunyuan_video",

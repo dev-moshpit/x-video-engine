@@ -405,15 +405,18 @@ _MODEL_SPECS: tuple[_ModelSpec, ...] = (
         ),
     ),
     _ModelSpec(
-        id="sdxl_base",
-        name="Stable Diffusion XL Base",
+        # Backs the SDXL Parallax video-model provider (the one heavy
+        # templates ai_story / reddit_story actually use). The provider
+        # consumes stabilityai/sdxl-turbo, not the larger Base 1.0 model.
+        id="sdxl_turbo",
+        name="SDXL Turbo (parallax provider)",
         mode="text-to-image",
         runtime_module="diffusers",
-        hf_repo="stabilityai/stable-diffusion-xl-base-1.0",
-        local_dirs=("sdxl-base", "stable-diffusion-xl-base-1.0"),
-        required_vram_gb=8.0,
+        hf_repo="stabilityai/sdxl-turbo",
+        local_dirs=("sdxl-turbo",),
+        required_vram_gb=4.0,
         install_hint=(
-            "huggingface-cli download stabilityai/stable-diffusion-xl-base-1.0"
+            "huggingface-cli download stabilityai/sdxl-turbo"
         ),
     ),
     _ModelSpec(
