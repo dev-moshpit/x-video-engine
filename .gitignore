@@ -27,3 +27,11 @@ out/
 .pnpm-store/
 .turbo/
 .pytest_cache/
+.pytest_tmp/
+
+# Local dev artifacts (downloaded binaries, QA outputs, harness traces)
+.local/
+.playwright-mcp/
+.claude/
+runs/
+dev.db
