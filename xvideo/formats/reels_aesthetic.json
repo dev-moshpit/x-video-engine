@@ -1,0 +1,24 @@
+{
+  "name": "reels_aesthetic",
+  "description": "Vibe-first Instagram Reels packaging: moodier wording, softer CTA, medium pacing. Best for abstract_loop, product_teaser, music_visualizer.",
+  "primary_platform": "reels",
+  "duration": {
+    "min": 15.0,
+    "max": 20.0
+  },
+  "motion_bias": "keep",
+  "publish_overrides": {
+    "cta_pool_replace": [
+      "More on the grid.",
+      "Follow for daily drops.",
+      "Save it, loop it, vibe.",
+      "Tap the heart if this hit."
+    ],
+    "hashtag_additions": [
+      "#reels",
+      "#instareels",
+      "#aesthetic"
+    ],
+    "max_hashtags": 11
+  }
+}

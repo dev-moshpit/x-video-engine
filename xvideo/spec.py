@@ -1,182 +1,412 @@
-"""Core data structures for the X-Video Engine.
+"""Core data structures for the LowPoly Video Engine.
 
-GenerationSpec is the structured request. ReferencePack is the normalized
-conditioning input. ShotPlan is the planner output per shot. ExecutionPlan
-is the full plan across shots.
+LowPolySpec is the structured user intent. StyleConfig holds resolved
+preset + overrides. ShotPlan is the single-shot dispatch unit.
+FacetScore captures low-poly-specific quality metrics.
+StyleDiagnostic gives structured failure reasons per take.
+TimingBreakdown captures performance telemetry.
+ArtifactMeta captures the full reproducibility snapshot.
 """
 
 from __future__ import annotations
 
+import hashlib
 from enum import Enum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
-# ─── Enums ────────────────────────────────────────────────────────────────
+# ─── Low-Poly Enums ──────────────────────────────────────────────────────
+
+class PolyDensity(str, Enum):
+    MINIMAL = "minimal"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class PaletteMode(str, Enum):
+    MONOCHROME = "monochrome"
+    DUOTONE = "duotone"
+    TRICOLOR = "tricolor"
+    PASTEL = "pastel"
+    NEON = "neon"
+    EARTH = "earth"
+    CUSTOM = "custom"
+
+class LightingMode(str, Enum):
+    FLAT = "flat"
+    GRADIENT = "gradient"
+    DRAMATIC = "dramatic"
+    BACKLIT = "backlit"
+    AMBIENT_OCCLUSION = "ambient_occlusion"
+
+class CameraMove(str, Enum):
+    STATIC = "static"
+    ORBIT = "orbit"
+    DOLLY_IN = "dolly_in"
+    DOLLY_OUT = "dolly_out"
+    PAN_LEFT = "pan_left"
+    PAN_RIGHT = "pan_right"
+    TILT_UP = "tilt_up"
+    TILT_DOWN = "tilt_down"
+    CRANE = "crane"
+    TRACKING = "tracking"
+
+class LoopMode(str, Enum):
+    NONE = "none"
+    SEAMLESS = "seamless"
+    PING_PONG = "ping_pong"
+
+class BackendName(str, Enum):
+    WAN21_LOWPOLY = "wan21_lowpoly"
+    WAN21_LOWPOLY_I2V = "wan21_lowpoly_i2v"
+    SDXL_KEYFRAME = "sdxl_keyframe"
 
 class Mode(str, Enum):
     T2V = "t2v"
     I2V = "i2v"
-    FIRST_LAST_FRAME = "first_last_frame"
-    REFERENCE_TO_VIDEO = "reference_to_video"
-    MULTI_IMAGE_TO_VIDEO = "multi_image_to_video"
-    VIDEO_EDIT = "video_edit"
-    VIDEO_EXTEND = "video_extend"
-    STORYBOARD = "storyboard_to_video"
-    CONTROLLED = "controlled"
-
-
-class BackendName(str, Enum):
-    # Phase 1 — AVAILABLE_NOW on RTX 2080 LAN worker
-    WAN21_T2V = "wan21_t2v"             # Wan 2.1 T2V-1.3B, ~8GB, native on 2080
-    SDXL_IMAGE = "sdxl_image"           # SDXL still generation for first-frame i2v
-    # Phase 1+ — Experimental / Future
-    WAN22_T2V = "wan22_t2v"
-    WAN22_I2V = "wan22_i2v"
-    WAN22_TI2V = "wan22_ti2v"
-    HUNYUAN15_T2V = "hunyuan15_t2v"
-    HUNYUAN15_I2V = "hunyuan15_i2v"
-    OMNIWEAVING = "omniweaving"
-    LTX_KEYFRAME = "ltx_keyframe"
-    LTX_CONTROL = "ltx_control"
-    LTX_EXTEND = "ltx_extend"
-
-
-class ReferenceKind(str, Enum):
-    IMAGE = "image"
-    VIDEO_CLIP = "video_clip"
-    AUDIO_CLIP = "audio_clip"
-    KEYFRAME = "keyframe"
-    CONTROL_MAP = "control_map"
-
-
-class ReferenceRole(str, Enum):
-    SUBJECT = "subject"
-    ENVIRONMENT = "environment"
-    STYLE = "style"
-    START_FRAME = "start_frame"
-    END_FRAME = "end_frame"
-    POSE = "pose"
-    DEPTH = "depth"
-    CANNY = "canny"
-    AUDIO_DRIVE = "audio_drive"
-
 
 class Priority(str, Enum):
     HERO = "hero"
     STANDARD = "standard"
-    FILLER = "filler"
+
+class RenderLane(str, Enum):
+    PREVIEW = "preview"
+    STANDARD = "standard"
+    FIDELITY = "fidelity"
+
+class SelectedVariant(str, Enum):
+    RAW = "raw"
+    POSTPROCESSED = "postprocessed"
+    SALVAGED = "salvaged"
+
+class HardwareTier(str, Enum):
+    """Detected or configured hardware class."""
+    LAPTOP_4GB = "laptop_4gb"     # GTX 1650 4GB — minimum viable
+    DESKTOP_8GB = "desktop_8gb"   # RTX 2080 8GB — comfortable
+    CLOUD = "cloud"               # 16GB+ — unconstrained
 
 
-# ─── References ───────────────────────────────────────────────────────────
+# ─── Render lane defaults — hardware-aware ───────────────────────────────
+# Keyed by HardwareTier. The engine selects the right profile based on
+# detected or configured VRAM. On 4GB, postprocess and salvage do more
+# of the aesthetic work instead of inference steps or candidates.
 
-class Reference(BaseModel):
-    """A single conditioning input."""
-    kind: ReferenceKind
-    path: str                                   # local path or s3:// URL
-    role: ReferenceRole
-    weight: float = Field(default=1.0, ge=0.0, le=2.0)
-    metadata: dict = Field(default_factory=dict)
+RENDER_LANE_DEFAULTS: dict[HardwareTier, dict[RenderLane, dict]] = {
+    HardwareTier.LAPTOP_4GB: {
+        RenderLane.PREVIEW: {
+            "resolution": "480p",
+            "duration_sec": 2.0,
+            "num_candidates": 1,
+            "num_inference_steps": 15,
+            "guidance_scale": 6.0,
+            "postprocess_enabled": False,
+        },
+        RenderLane.STANDARD: {
+            "resolution": "480p",
+            "duration_sec": 3.0,
+            "num_candidates": 1,
+            "num_inference_steps": 20,
+            "guidance_scale": 7.0,
+            "postprocess_enabled": True,
+        },
+        RenderLane.FIDELITY: {
+            "resolution": "480p",
+            "duration_sec": 3.0,
+            "num_candidates": 2,
+            "num_inference_steps": 25,
+            "guidance_scale": 7.5,
+            "postprocess_enabled": True,
+        },
+    },
+    HardwareTier.DESKTOP_8GB: {
+        RenderLane.PREVIEW: {
+            "resolution": "480p",
+            "duration_sec": 3.0,
+            "num_candidates": 1,
+            "num_inference_steps": 20,
+            "guidance_scale": 6.0,
+            "postprocess_enabled": False,
+        },
+        RenderLane.STANDARD: {
+            "resolution": "480p",
+            "duration_sec": 4.0,
+            "num_candidates": 2,
+            "num_inference_steps": 25,
+            "guidance_scale": 7.0,
+            "postprocess_enabled": False,
+        },
+        RenderLane.FIDELITY: {
+            "resolution": "480p",
+            "duration_sec": 4.0,
+            "num_candidates": 3,
+            "num_inference_steps": 30,
+            "guidance_scale": 7.5,
+            "postprocess_enabled": True,
+        },
+    },
+}
+# Cloud tier inherits desktop defaults (unconstrained)
+RENDER_LANE_DEFAULTS[HardwareTier.CLOUD] = RENDER_LANE_DEFAULTS[HardwareTier.DESKTOP_8GB]
 
 
-class ReferencePack(BaseModel):
-    """Normalized bundle of conditioning inputs for a generation job."""
-    items: list[Reference] = Field(default_factory=list)
-    preprocessed_manifest: Optional[str] = None   # path to manifest JSON
-    clip_embeddings: Optional[str] = None         # path to embeddings file
+def detect_hardware_tier() -> HardwareTier:
+    """Detect GPU VRAM and return the appropriate hardware tier."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            _, total = torch.cuda.mem_get_info(0)
+            vram_gb = total / (1024 ** 3)
+            if vram_gb >= 12:
+                return HardwareTier.CLOUD
+            elif vram_gb >= 6:
+                return HardwareTier.DESKTOP_8GB
+            else:
+                return HardwareTier.LAPTOP_4GB
+    except ImportError:
+        pass
+    # No GPU or torch: assume tightest constraints
+    return HardwareTier.LAPTOP_4GB
 
 
-# ─── Spec building blocks ─────────────────────────────────────────────────
-
-class Camera(BaseModel):
-    move: Literal["static", "pan", "push", "pull", "orbit", "handheld", "crane", "dolly"] = "static"
-    speed: Literal["slow", "medium", "fast"] = "medium"
-    angle: Literal["eye_level", "low", "high", "dutch", "overhead"] = "eye_level"
-
-
-class Motion(BaseModel):
-    subject_motion: Literal["minimal", "moderate", "dynamic"] = "moderate"
-    temporal_pacing: Literal["smooth", "staccato"] = "smooth"
+def get_lane_defaults(lane: RenderLane, tier: HardwareTier | None = None) -> dict:
+    """Get render lane defaults for the given hardware tier."""
+    if tier is None:
+        tier = detect_hardware_tier()
+    return RENDER_LANE_DEFAULTS[tier][lane]
 
 
-class Constraints(BaseModel):
-    aspect_ratio: Literal["16:9", "9:16", "1:1", "4:3", "21:9"] = "16:9"
-    resolution: Literal["480p", "720p", "1080p"] = "720p"
-    fps: Literal[24, 30] = 24
-    seed: Optional[int] = None
+# ─── Policy thresholds — config-driven ───────────────────────────────────
+# Loaded from default.yaml at runtime. These are fallback defaults.
+# Can be overridden per-lane or per-preset in config.
+
+class PolicyConfig(BaseModel):
+    """Regen-vs-salvage and scoring thresholds. Config-driven."""
+    reject_floor: float = 0.25
+    salvage_ceiling: float = 0.45
+    postprocess_improvement_threshold: float = 0.03
+    # Diagnostic thresholds (lenient for v1)
+    palette_cohesion_min: float = 0.35
+    facet_clarity_min: float = 0.25
+    stylization_strength_min: float = 0.30
+    edge_stability_min: float = 0.25
+    prompt_alignment_min: float = 0.20
+
+# Global default instance — overridden by config loading
+DEFAULT_POLICY = PolicyConfig()
 
 
-class AudioIntent(BaseModel):
-    ambience: Optional[str] = None
-    music: Optional[str] = None
-    sfx: list[str] = Field(default_factory=list)
-    dialogue: Optional[str] = None
+# ─── Style Configuration ────────────────────────────────────��────────────
+
+class StyleConfig(BaseModel):
+    """Resolved style parameters — merged from preset + user overrides."""
+    preset_name: str = "crystal"
+    poly_density: PolyDensity = PolyDensity.MEDIUM
+    palette: PaletteMode = PaletteMode.PASTEL
+    custom_colors: list[str] = Field(default_factory=list)
+    lighting: LightingMode = LightingMode.GRADIENT
+    background: str = "clean gradient"
+    extra_tags: list[str] = Field(default_factory=list)
 
 
-# ─── Top-level spec ───────────────────────────────────────────────────────
+# ─── Top-level spec ──────────────────────────────────────────────────────
 
-class GenerationSpec(BaseModel):
-    """Structured user intent. Input to the planner."""
-    mode: Mode = Mode.T2V
+class LowPolySpec(BaseModel):
     subject: str
     action: str = ""
     environment: str = ""
-    style: str = ""
-    duration_sec: float = Field(default=5.0, gt=0.0, le=60.0)
-    camera: Camera = Field(default_factory=Camera)
-    motion: Motion = Field(default_factory=Motion)
-    references: list[Reference] = Field(default_factory=list)
-    constraints: Constraints = Field(default_factory=Constraints)
-    audio_intent: AudioIntent = Field(default_factory=AudioIntent)
-    raw_prompt: Optional[str] = None             # original user text if compiled
+    style: StyleConfig = Field(default_factory=StyleConfig)
+    camera: CameraMove = CameraMove.ORBIT
+    camera_speed: float = Field(default=0.5, ge=0.0, le=1.0)
+    loop_mode: LoopMode = LoopMode.NONE
+    duration_sec: float = Field(default=3.0, gt=0.0, le=60.0)
+    resolution: Literal["480p", "720p"] = "480p"
+    fps: Literal[24] = 24
+    aspect_ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
+    seed: Optional[int] = None
+    reference_image: Optional[str] = None
+    num_candidates: int = Field(default=1, ge=1, le=4)
+    render_lane: RenderLane = RenderLane.PREVIEW
+    raw_prompt: Optional[str] = None
 
 
-# ─── Planner output ───────────────────────────────────────────────────────
+# ─── Composer output ─────────────────────────────────────────────────────
 
 class ShotPlan(BaseModel):
-    """A single shot to be generated by one backend."""
     shot_id: str
-    backend: BackendName
-    mode: Mode
-    prompt: str                                  # text prompt for this backend
-    negative_prompt: Optional[str] = None
-    conditioning: dict = Field(default_factory=dict)   # backend-specific refs
-    duration_sec: float
-    resolution: Literal["480p", "720p", "1080p"] = "720p"
-    fps: Literal[24, 30] = 24
+    backend: BackendName = BackendName.WAN21_LOWPOLY
+    mode: Mode = Mode.T2V
+    prompt: str
+    negative_prompt: str = ""
+    style_config: StyleConfig = Field(default_factory=StyleConfig)
+    duration_sec: float = 3.0
+    resolution: Literal["480p", "720p"] = "480p"
+    fps: Literal[24] = 24
     aspect_ratio: str = "16:9"
     priority: Priority = Priority.STANDARD
-    num_candidates: int = 1                      # N takes for reranker
+    num_candidates: int = 1
     seed: int = 0
+    num_inference_steps: int = 25
+    guidance_scale: float = 7.0
+    render_lane: RenderLane = RenderLane.PREVIEW
 
 
 class ExecutionPlan(BaseModel):
-    """Full planner output. One or more shots, executed in order."""
     spec_id: str
     shots: list[ShotPlan]
     estimated_cost_usd: float = 0.0
     notes: str = ""
 
 
-# ─── Results ──────────────────────────────────────────────────────────────
+# ─── Scoring ─────────────────────────────────────────────────────────────
+
+SCORER_WEIGHTS_V1 = {
+    "facet_clarity": 0.30,
+    "palette_cohesion": 0.20,
+    "prompt_alignment": 0.20,
+    "edge_stability": 0.15,
+    "stylization_strength": 0.15,
+}
+
+class FacetScore(BaseModel):
+    """All metrics 0-1, higher is better."""
+    facet_clarity: float = Field(default=0.0, ge=0.0, le=1.0)
+    palette_cohesion: float = Field(default=0.0, ge=0.0, le=1.0)
+    prompt_alignment: float = Field(default=0.0, ge=0.0, le=1.0)
+    edge_stability: float = Field(default=0.0, ge=0.0, le=1.0)
+    stylization_strength: float = Field(default=0.0, ge=0.0, le=1.0)
+    overall: float = Field(default=0.0, ge=0.0, le=1.0)
+    scored_postprocessed: bool = False
+
+    def compute_overall(self, weights: dict[str, float] | None = None) -> float:
+        w = weights or SCORER_WEIGHTS_V1
+        self.overall = (
+            self.facet_clarity * w.get("facet_clarity", 0.30)
+            + self.palette_cohesion * w.get("palette_cohesion", 0.20)
+            + self.prompt_alignment * w.get("prompt_alignment", 0.20)
+            + self.edge_stability * w.get("edge_stability", 0.15)
+            + self.stylization_strength * w.get("stylization_strength", 0.15)
+        )
+        return self.overall
+
+
+# ─── Style diagnostics ───────────────────────────────────────────────────
+
+class StyleDiagnostic(BaseModel):
+    """Informational for debugging and salvage — not a hard gate on selection."""
+    palette_too_noisy: bool = False
+    edges_too_soft: bool = False
+    too_photoreal: bool = False
+    temporal_edge_flicker: bool = False
+    prompt_subject_weak: bool = False
+    reasons: list[str] = Field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return not any([
+            self.palette_too_noisy, self.edges_too_soft,
+            self.too_photoreal, self.temporal_edge_flicker,
+            self.prompt_subject_weak,
+        ])
+
+
+# ─── Guard mutations ─────────────────────────────────────────────────────
+
+class GuardMutation(BaseModel):
+    rule: str
+    field: str
+    from_value: str
+    to_value: str
+
+
+# ─── Salvage provenance ─────────────────────────────────────────────────
+
+class SalvageRecord(BaseModel):
+    applied: bool = False
+    strategy: str = ""
+    score_before: float = 0.0
+    score_after: float = 0.0
+    attempts: int = 0
+    style_passed_after: bool = False
+
+
+# ─── Performance telemetry ───────────────────────────────────────────────
+
+class TimingBreakdown(BaseModel):
+    """Wall-clock timing for each pipeline phase. All values in seconds."""
+    planning_sec: float = 0.0
+    generation_sec: float = 0.0
+    scoring_sec: float = 0.0
+    postprocess_sec: float = 0.0
+    salvage_sec: float = 0.0
+    total_sec: float = 0.0
+
+
+# ─── Scoring breakdown for sidecar ──────────────────────────────────────
+
+class ScoringBreakdown(BaseModel):
+    raw_score: Optional[FacetScore] = None
+    postprocessed_score: Optional[FacetScore] = None
+    final_score: Optional[FacetScore] = None
+    selected_variant: SelectedVariant = SelectedVariant.RAW
+    salvage: Optional[SalvageRecord] = None
+    diagnostic: Optional[StyleDiagnostic] = None
+
+
+# ─── Artifact metadata — reproducibility contract ───────────────────────
+
+class ArtifactMeta(BaseModel):
+    spec_id: str
+    seed: int
+    preset_name: str
+    compiled_prompt: str
+    compiled_negative: str
+    prompt_hash: str = ""
+    style_config: StyleConfig = Field(default_factory=StyleConfig)
+    render_lane: RenderLane = RenderLane.PREVIEW
+    num_inference_steps: int = 25
+    guidance_scale: float = 7.0
+    resolution: str = "480p"
+    fps: int = 24
+    duration_sec: float = 3.0
+    backend: BackendName = BackendName.WAN21_LOWPOLY
+    engine_version: str = "0.3.0"
+    postprocess_config: dict = Field(default_factory=dict)
+    guard_mutations: list[GuardMutation] = Field(default_factory=list)
+    scoring: Optional[ScoringBreakdown] = None
+    timing: Optional[TimingBreakdown] = None
+
+    def model_post_init(self, __context) -> None:
+        if not self.prompt_hash:
+            self.prompt_hash = hashlib.sha256(
+                self.compiled_prompt.encode()
+            ).hexdigest()[:16]
+
+
+# ─── Results ─────────────────────────────────────────────────────────────
 
 class Take(BaseModel):
-    """One candidate generation for a shot."""
     take_id: str
     shot_id: str
-    take_number: int
-    video_path: str
-    seed: int
-    backend: BackendName
+    take_number: int = 0
+    video_path: str = ""
+    postprocessed_path: str = ""
+    seed: int = 0
+    backend: BackendName = BackendName.WAN21_LOWPOLY
     generation_time_sec: float = 0.0
     cost_usd: float = 0.0
-    score: Optional[float] = None
-    scores_detail: dict = Field(default_factory=dict)
+    facet_score: Optional[FacetScore] = None
+    facet_score_raw: Optional[FacetScore] = None
+    style_diagnostic: Optional[StyleDiagnostic] = None
+    artifact_meta: Optional[ArtifactMeta] = None
+    selected_variant: SelectedVariant = SelectedVariant.RAW
+    salvage: Optional[SalvageRecord] = None
+    timing: Optional[TimingBreakdown] = None
+    decision_summary: str = ""
 
 
 class ShotResult(BaseModel):
-    """All takes for one shot + the selected winner."""
     shot_id: str
     takes: list[Take]
     winner_take_id: Optional[str] = None
@@ -184,7 +414,6 @@ class ShotResult(BaseModel):
 
 
 class GenerationResult(BaseModel):
-    """Final output from the engine."""
     spec_id: str
     plan: ExecutionPlan
     shot_results: list[ShotResult]

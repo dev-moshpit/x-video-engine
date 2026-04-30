@@ -1,8 +1,8 @@
-"""BackendWorker interface.
+"""WorkerClient interface for remote GPU workers.
 
-Workers are remote: they run on GPU hosts (RunPod/vast.ai) and speak JSON-RPC
-over HTTP. This module defines the client-side interface the router uses.
-Actual model inference lives in worker_runtime/, not here.
+Workers run on GPU hosts and speak HTTP JSON-RPC. This module defines
+the client-side interface the router uses to dispatch low-poly generation
+jobs. Actual model inference lives in worker_runtime/.
 """
 
 from __future__ import annotations
@@ -24,29 +24,17 @@ class WorkerClient(ABC):
         self.timeout_sec = timeout_sec
 
     @abstractmethod
-    def is_available(self) -> bool:
-        """Health check. Returns True if the worker responds."""
-        ...
+    def is_available(self) -> bool: ...
 
     @abstractmethod
-    def submit(self, shot: ShotPlan, ref_pack_url: Optional[str] = None) -> str:
-        """Submit a job. Returns a job_id."""
-        ...
+    def submit(self, shot: ShotPlan, ref_pack_url: Optional[str] = None) -> str: ...
 
     @abstractmethod
-    def poll(self, job_id: str) -> dict:
-        """Poll a job. Returns status dict: {status, progress, result_url, error}."""
-        ...
+    def poll(self, job_id: str) -> dict: ...
 
     @abstractmethod
-    def cancel(self, job_id: str) -> bool:
-        """Cancel a running job."""
-        ...
+    def cancel(self, job_id: str) -> bool: ...
 
     def generate_sync(self, shot: ShotPlan, ref_pack_url: Optional[str] = None) -> Optional[Take]:
-        """Submit + poll until done. Returns a Take on success, None on failure.
-
-        Default implementation uses submit + poll. Subclasses can override
-        for more efficient execution.
-        """
-        raise NotImplementedError("generate_sync will be implemented in Phase 1")
+        """Submit + poll until done. Returns a Take on success, None on failure."""
+        raise NotImplementedError("generate_sync implemented by subclass")

@@ -1,7 +1,7 @@
-"""Wan 2.1 worker client — HTTP over LAN to the RTX 2080 desktop worker.
+"""Wan 2.1 low-poly worker client — HTTP over LAN to the RTX 2080 desktop.
 
-The laptop orchestrator uses this to dispatch jobs to the FastAPI service
-defined in worker_runtime/wan21_worker.py.
+The laptop orchestrator uses this to dispatch low-poly generation jobs
+to the FastAPI service defined in worker_runtime/wan21_worker.py.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from xvideo.workers.base import WorkerClient
 logger = logging.getLogger(__name__)
 
 
-class Wan21WorkerClient(WorkerClient):
-    name = BackendName.WAN21_T2V
+class Wan21LowPolyClient(WorkerClient):
+    name = BackendName.WAN21_LOWPOLY
 
     def __init__(
         self,
@@ -63,15 +63,15 @@ class Wan21WorkerClient(WorkerClient):
             "backend": shot.backend.value,
             "mode": shot.mode.value,
             "prompt": shot.prompt,
-            "negative_prompt": shot.negative_prompt or "",
+            "negative_prompt": shot.negative_prompt,
             "seed": shot.seed,
             "duration_sec": shot.duration_sec,
             "resolution": shot.resolution,
             "fps": shot.fps,
             "aspect_ratio": shot.aspect_ratio,
-            "num_inference_steps": shot.conditioning.get("num_inference_steps", 25),
-            "guidance_scale": shot.conditioning.get("guidance_scale", 6.0),
-            "init_image_path": shot.conditioning.get("init_image_path"),
+            "num_inference_steps": shot.num_inference_steps,
+            "guidance_scale": shot.guidance_scale,
+            "style_config": shot.style_config.model_dump(),
         }
         r = self._client.post("/generate", json=payload)
         r.raise_for_status()
@@ -103,7 +103,7 @@ class Wan21WorkerClient(WorkerClient):
         return dest
 
     def generate_sync(self, shot: ShotPlan, ref_pack_url: Optional[str] = None) -> Optional[Take]:
-        """Submit → poll until terminal → download → return Take."""
+        """Submit -> poll until terminal -> download -> return Take."""
         start = time.time()
         job_id = self.submit(shot, ref_pack_url)
         deadline = start + self.timeout_sec

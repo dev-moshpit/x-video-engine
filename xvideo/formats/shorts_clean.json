@@ -1,0 +1,24 @@
+{
+  "name": "shorts_clean",
+  "description": "Searchable YouTube-Shorts-first packaging: cleaner title phrasing, restrained CTA, calm-to-medium pacing. Best for motivational_quotes, ai_facts, history_mystery.",
+  "primary_platform": "shorts",
+  "duration": {
+    "min": 18.0,
+    "max": 22.0
+  },
+  "motion_bias": "down",
+  "publish_overrides": {
+    "cta_pool_replace": [
+      "Save this for later.",
+      "Watch till the end.",
+      "Follow for daily drops.",
+      "Share with someone who'd get it."
+    ],
+    "hashtag_additions": [
+      "#shorts",
+      "#shortvideo",
+      "#youtubeshorts"
+    ],
+    "max_hashtags": 10
+  }
+}

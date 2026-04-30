@@ -1,8 +1,7 @@
-"""Generation router — dispatches ShotPlans to backend workers.
+"""Generation router — dispatches ShotPlans to the low-poly backend worker.
 
-Phase 1c: wires Wan 2.1 worker client. Loads endpoints from
-configs/backends.yaml and instantiates client objects for available
-backends.
+Phase 1: single backend (Wan 2.1 low-poly). Loads endpoint from
+configs/backends.yaml and instantiates the worker client.
 """
 
 from __future__ import annotations
@@ -17,13 +16,13 @@ import yaml
 from xvideo.capabilities import CAPABILITIES
 from xvideo.spec import BackendName, ExecutionPlan, ShotPlan, ShotResult, Take
 from xvideo.workers.base import WorkerClient
-from xvideo.workers.wan21 import Wan21WorkerClient
+from xvideo.workers.wan21 import Wan21LowPolyClient
 
 logger = logging.getLogger(__name__)
 
 
 class Router:
-    """Dispatches shots to the right backend worker."""
+    """Dispatches shots to the low-poly backend worker."""
 
     def __init__(self, config_path: str | Path = "configs/backends.yaml"):
         self.config_path = Path(config_path)
@@ -67,15 +66,14 @@ class Router:
         timeout_sec: int,
         cache_root: str,
     ) -> Optional[WorkerClient]:
-        if name == BackendName.WAN21_T2V:
-            return Wan21WorkerClient(
+        if name == BackendName.WAN21_LOWPOLY:
+            return Wan21LowPolyClient(
                 endpoint=endpoint,
                 auth_token=auth_token,
                 timeout_sec=timeout_sec,
                 cache_dir=Path(cache_root) / "takes",
             )
-        # Phase 1f: add Wan21I2V client variant (same worker endpoint, different mode)
-        # Phase 2+: add SDXL client, LTX client, etc.
+        # Phase 2: add I2V and SDXL keyframe clients
         return None
 
     def available_backends(self) -> list[BackendName]:
@@ -91,7 +89,7 @@ class Router:
         return total
 
     def dispatch(self, shot: ShotPlan, ref_pack_url: Optional[str] = None) -> ShotResult:
-        """Dispatch one shot. Phase 1c: single-candidate only; multi-take lands in Phase 1e."""
+        """Dispatch one shot. Phase 1: single-candidate. Phase 2a adds multi-take + scoring."""
         client = self.clients.get(shot.backend)
         if client is None:
             return ShotResult(
@@ -102,7 +100,6 @@ class Router:
 
         takes: list[Take] = []
         for take_num in range(max(1, shot.num_candidates)):
-            # Seed-varied take: base seed + take number
             take_shot = shot.model_copy(update={"seed": shot.seed + take_num})
             take = client.generate_sync(take_shot, ref_pack_url)
             if take is None:
@@ -118,8 +115,8 @@ class Router:
                 failure_codes=["all_takes_failed"],
             )
 
-        # Phase 1c: no reranker yet; winner = first successful take.
-        # Phase 1e wires the reranker.
+        # Phase 1: winner = first successful take.
+        # Phase 2a wires the FacetScorer.
         return ShotResult(
             shot_id=shot.shot_id,
             takes=takes,

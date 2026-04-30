@@ -1,0 +1,26 @@
+{
+  "name": "tiktok_fast",
+  "description": "Punchy TikTok-first packaging: harder hooks, faster pacing, aggressive CTA. Best for music_visualizer, ai_facts, abstract_loop, and bolder product_teaser rows.",
+  "primary_platform": "tiktok",
+  "duration": {
+    "min": 12.0,
+    "max": 18.0
+  },
+  "motion_bias": "up",
+  "publish_overrides": {
+    "cta_pool_replace": [
+      "Wait for it.",
+      "Watch till the end.",
+      "Tap follow, we drop daily.",
+      "Save this before it's gone.",
+      "Drop a 🔥 if you felt that."
+    ],
+    "hashtag_additions": [
+      "#fyp",
+      "#foryou",
+      "#tiktok",
+      "#viral"
+    ],
+    "max_hashtags": 12
+  }
+}

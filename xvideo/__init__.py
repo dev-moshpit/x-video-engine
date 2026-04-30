@@ -1,3 +1,3 @@
-"""X-Video Engine — Generic multimodal video generation platform."""
+"""LowPoly Video Engine — Stylized faceted animation on consumer GPUs."""
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
