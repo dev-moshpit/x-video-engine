@@ -107,7 +107,7 @@ export default function CreateHubPage() {
   const ffmpegOk = system ? system.probes.find((p) => p.name === "ffmpeg")?.ok ?? null : null;
   const redisOk = system ? system.probes.find((p) => p.name === "redis")?.ok ?? null : null;
   const whisperOk = system
-    ? system.probes.find((p) => p.name === "faster-whisper")?.ok ?? null
+    ? system.probes.find((p) => p.name === "faster_whisper")?.ok ?? null
     : null;
 
   const baseInfraReady = ffmpegOk === true && redisOk === true;

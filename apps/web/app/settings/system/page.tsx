@@ -343,7 +343,7 @@ function humanProbeName(name: string): string {
       return "Object storage";
     case "gpu":
       return "GPU";
-    case "faster-whisper":
+    case "faster_whisper":
       return "faster-whisper (clipper / captions)";
     default:
       return name;
