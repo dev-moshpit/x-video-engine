@@ -627,6 +627,390 @@ export const deleteRenderShare = (jobId: string, token: string) =>
     token,
   });
 
+// ─── Presigned uploads ─────────────────────────────────────────────────
+
+export interface PresignResponse {
+  url: string;
+  key: string;
+  method: "PUT";
+  expires_in: number;
+  content_type: string;
+}
+
+export const presignUpload = (
+  body: { kind: "audio" | "video" | "image"; content_type: string; expires_sec?: number },
+  token: string,
+) =>
+  apiFetch<PresignResponse>("/api/uploads/sign", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+/**
+ * Direct browser → R2/MinIO upload using a presigned PUT URL.
+ * Returns the storage object key (server-side path) so the caller
+ * can pass it to a worker endpoint.
+ */
+export async function uploadFileDirect(
+  file: File,
+  kind: "audio" | "video" | "image",
+  token: string,
+): Promise<{ key: string; public_url: string }> {
+  const presign = await presignUpload(
+    { kind, content_type: file.type || "application/octet-stream" },
+    token,
+  );
+  const putRes = await fetch(presign.url, {
+    method: "PUT",
+    body: file,
+    headers: { "content-type": presign.content_type },
+  });
+  if (!putRes.ok) {
+    const body = await putRes.text().catch(() => "");
+    throw new Error(`upload failed: ${putRes.status} ${body.slice(0, 300)}`);
+  }
+  // Strip the query string (?X-Amz-...) — the public URL is just the key path.
+  const u = new URL(presign.url);
+  const public_url = `${u.origin}${u.pathname}`;
+  return { key: presign.key, public_url };
+}
+
+// ─── Platform Phase 1: Editor ───────────────────────────────────────────
+
+export type EditorAspect = "9:16" | "1:1" | "16:9" | "source";
+
+export interface EditorJob {
+  job_id: string;
+  status: "pending" | "running" | "complete" | "failed";
+  progress: number;
+  source_url: string;
+  trim_start: number | null;
+  trim_end: number | null;
+  aspect: string;
+  captions: boolean;
+  caption_language: string;
+  output_url: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export const editorProcess = (
+  body: {
+    source_url: string;
+    trim_start?: number | null;
+    trim_end?: number | null;
+    aspect: EditorAspect;
+    captions: boolean;
+    caption_language?: string;
+  },
+  token: string,
+) =>
+  apiFetch<EditorJob>("/api/editor/process", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const getEditorJob = (jobId: string, token: string) =>
+  apiFetch<EditorJob>(`/api/editor/${jobId}`, { token });
+
+// ─── Platform Phase 1: AI Clipper ───────────────────────────────────────
+
+export interface ClipMoment {
+  moment_id: string;
+  start: number;
+  end: number;
+  duration: number;
+  text: string;
+  score: number;
+  score_breakdown: {
+    hook_strength: number;
+    emotional_spike: number;
+    controversy: number;
+    clarity: number;
+    length_fit: number;
+    speaker_energy: number;
+    caption_potential: number;
+  };
+  notes: string[];
+}
+
+export interface ClipJob {
+  job_id: string;
+  status: "pending" | "running" | "complete" | "failed";
+  progress: number;
+  source_url: string;
+  source_kind: string;
+  language: string;
+  duration_sec: number | null;
+  transcript_text: string | null;
+  moments: ClipMoment[];
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface ClipArtifact {
+  id: string;
+  moment_id: string;
+  start_sec: number;
+  end_sec: number;
+  aspect: string;
+  captions: boolean;
+  url: string | null;
+  status: "pending" | "running" | "complete" | "failed";
+  error: string | null;
+  created_at: string;
+}
+
+export const analyzeClip = (
+  body: { source_url: string; source_kind?: "video" | "audio"; language?: string },
+  token: string,
+) =>
+  apiFetch<ClipJob>("/api/clips/analyze", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const getClipJob = (jobId: string, token: string) =>
+  apiFetch<ClipJob>(`/api/clips/${jobId}`, { token });
+
+export const exportClip = (
+  jobId: string,
+  body: { moment_id: string; aspect: ExportAspect; captions: boolean },
+  token: string,
+) =>
+  apiFetch<ClipArtifact>(`/api/clips/${jobId}/export`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const listClipArtifacts = (jobId: string, token: string) =>
+  apiFetch<ClipArtifact[]>(`/api/clips/${jobId}/artifacts`, { token });
+
+// ─── Platform Phase 1: video-model registry ─────────────────────────────
+
+export interface VideoModelInfo {
+  id: string;
+  name: string;
+  mode: string;
+  required_vram_gb: number;
+  installed: boolean;
+  install_hint: string;
+  error: string | null;
+  cache_path: string | null;
+  description: string;
+}
+
+export interface VideoModels {
+  providers: VideoModelInfo[];
+  installed: number;
+  total: number;
+}
+
+export const getVideoModels = (token: string) =>
+  apiFetch<VideoModels>("/api/video-models", { token });
+
+export interface VideoGeneration {
+  job_id: string;
+  provider_id: string;
+  prompt: string;
+  image_url: string | null;
+  duration_seconds: number;
+  fps: number;
+  aspect_ratio: string;
+  seed: number | null;
+  status: "pending" | "running" | "complete" | "failed";
+  progress: number;
+  output_url: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export const generateVideo = (
+  body: {
+    provider_id: string;
+    prompt: string;
+    image_url?: string | null;
+    duration_seconds?: number;
+    fps?: number;
+    aspect_ratio?: "9:16" | "1:1" | "16:9";
+    seed?: number | null;
+    extra?: Record<string, unknown>;
+  },
+  token: string,
+) =>
+  apiFetch<VideoGeneration>("/api/video-models/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const getVideoGeneration = (jobId: string, token: string) =>
+  apiFetch<VideoGeneration>(`/api/video-models/jobs/${jobId}`, { token });
+
+// ─── Platform Phase 1: Presenter ────────────────────────────────────────
+
+export interface PresenterProviderInfo {
+  id: string;
+  name: string;
+  installed: boolean;
+  install_hint: string;
+  error: string | null;
+  cache_path: string | null;
+  description: string;
+  required_vram_gb: number;
+}
+
+export interface PresenterProviders {
+  providers: PresenterProviderInfo[];
+  installed: number;
+  total: number;
+}
+
+export interface PresenterJob {
+  job_id: string;
+  provider_id: string;
+  script: string;
+  avatar_image_url: string;
+  voice: string | null;
+  voice_rate: string;
+  aspect_ratio: string;
+  headline: string | null;
+  ticker: string | null;
+  status: "pending" | "running" | "complete" | "failed";
+  progress: number;
+  output_url: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export const listPresenterProviders = (token: string) =>
+  apiFetch<PresenterProviders>("/api/presenter/providers", { token });
+
+export const renderPresenter = (
+  body: {
+    provider_id: string;
+    script: string;
+    avatar_image_url: string;
+    voice?: string | null;
+    voice_rate?: string;
+    aspect_ratio?: "9:16" | "1:1" | "16:9";
+    headline?: string | null;
+    ticker?: string | null;
+  },
+  token: string,
+) =>
+  apiFetch<PresenterJob>("/api/presenter/render", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const getPresenterJob = (jobId: string, token: string) =>
+  apiFetch<PresenterJob>(`/api/presenter/jobs/${jobId}`, { token });
+
+// ─── Platform Phase 1: Publishing targets ──────────────────────────────
+
+export interface PublishingProviderInfo {
+  id: string;
+  name: string;
+  configured: boolean;
+  setup_hint: string;
+  error: string | null;
+  description: string;
+}
+
+export interface PublishingProviders {
+  providers: PublishingProviderInfo[];
+  configured: number;
+  total: number;
+}
+
+export interface PublishingJob {
+  job_id: string;
+  provider_id: string;
+  video_url: string;
+  title: string;
+  description: string;
+  tags: string[];
+  privacy: string;
+  status: "pending" | "running" | "complete" | "failed";
+  external_id: string | null;
+  external_url: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export const listPublishingProviders = (token: string) =>
+  apiFetch<PublishingProviders>("/api/publishing/providers", { token });
+
+export const uploadToYouTube = (
+  body: {
+    video_url: string;
+    title: string;
+    description?: string;
+    tags?: string[];
+    privacy?: "public" | "unlisted" | "private";
+  },
+  token: string,
+) =>
+  apiFetch<PublishingJob>("/api/publishing/youtube/upload", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+
+export const getPublishingJob = (jobId: string, token: string) =>
+  apiFetch<PublishingJob>(`/api/publishing/jobs/${jobId}`, { token });
+
+// ─── Platform Phase 1: system + model health ───────────────────────────
+
+export interface HealthProbe {
+  name: string;
+  ok: boolean;
+  detail: string;
+  error: string | null;
+  hint: string | null;
+  extra: Record<string, unknown>;
+}
+
+export interface SystemHealth {
+  ok: boolean;
+  probes: HealthProbe[];
+}
+
+export interface ModelProbe {
+  id: string;
+  name: string;
+  mode: string;
+  installed: boolean;
+  required_vram_gb: number;
+  status: string;
+  error: string | null;
+  hint: string | null;
+  cache_path: string | null;
+}
+
+export interface ModelsHealth {
+  models: ModelProbe[];
+  installed: number;
+  total: number;
+}
+
+export const getSystemHealth = (token: string) =>
+  apiFetch<SystemHealth>("/api/system/health", { token });
+
+export const getModelsHealth = (token: string) =>
+  apiFetch<ModelsHealth>("/api/models/health", { token });
+
 // ─── Phase 13.5: export variants ────────────────────────────────────────
 
 export type ExportAspect = "9:16" | "1:1" | "16:9";
