@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -24,14 +23,11 @@ import {
 
 
 /**
- * Editor page — Platform Phase 1.
- *
- * Upload → preview source → trim → choose aspect + caption settings
- * → submit → poll until output_url arrives → download.
- *
- * The trim handles use the native HTML5 ``<video>`` element to seek
- * — we don't parse frames in the browser. Once the user submits, the
- * api enqueues a job and the worker does a single ffmpeg pass.
+ * Quick editor: trim, reframe, optionally burn auto-captions, export.
+ * Single-pass ffmpeg on the worker. The page hides the technical
+ * detail (presigned PUT, ffmpeg filters, faster-whisper language
+ * codes) so a non-developer can ship a vertical clip in under a
+ * minute.
  */
 export default function EditorPage() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -44,6 +40,7 @@ export default function EditorPage() {
   const [aspect, setAspect] = useState<EditorAspect>("9:16");
   const [captions, setCaptions] = useState(true);
   const [language, setLanguage] = useState("auto");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<EditorJob | null>(null);
@@ -61,7 +58,6 @@ export default function EditorPage() {
 
   useEffect(() => () => stopPolling(), []);
 
-  // Wire the local file → object URL for preview.
   useEffect(() => {
     if (!file) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -116,8 +112,6 @@ export default function EditorPage() {
       const token = await getToken();
       if (!token) throw new Error("not signed in");
 
-      // Upload once per source — cache the public_url so the user can
-      // tweak settings and re-submit without re-uploading.
       let url = uploadedUrl;
       if (!url) {
         const isAudio = file.type.startsWith("audio/");
@@ -158,12 +152,13 @@ export default function EditorPage() {
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Editor</h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-          Upload a clip, set trim handles, pick the aspect ratio, and
-          export. Auto-captions are on by default — they run via
-          faster-whisper on the worker.
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Quick Editor
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+          Upload a clip, trim it, choose an aspect, and we&apos;ll export
+          a captioned vertical short.
         </p>
       </div>
 
@@ -173,44 +168,50 @@ export default function EditorPage() {
         </div>
       ) : null}
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>1. Upload a clip</CardTitle>
-          <CardDescription>
-            mp4 / mov / mkv / mp3 — pasted into a presigned PUT URL.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <input
-            type="file"
-            accept="video/*,audio/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-zinc-100 hover:file:bg-zinc-700"
-          />
-          {previewUrl ? (
-            <video
-              ref={videoRef}
-              src={previewUrl}
-              controls
-              onLoadedMetadata={onLoadedMetadata}
-              className="max-h-72 w-full rounded-md border border-zinc-900 bg-black"
-            />
-          ) : null}
-        </CardContent>
-      </Card>
+      {!file ? (
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <label
+              htmlFor="editor-source"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-zinc-800 bg-zinc-950/40 px-6 py-12 text-center transition hover:border-zinc-700"
+            >
+              <span className="text-3xl">🎞</span>
+              <span className="text-sm font-medium text-zinc-100">
+                Click to choose a video
+              </span>
+              <span className="text-xs text-zinc-500">
+                MP4, MOV, MKV — up to 1 GB
+              </span>
+              <input
+                id="editor-source"
+                type="file"
+                accept="video/*,audio/*"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {file ? (
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>2. Trim + reframe</CardTitle>
-            <CardDescription>
-              Source duration: {duration.toFixed(1)}s
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid gap-4 pt-6">
+            {previewUrl ? (
+              <video
+                ref={videoRef}
+                src={previewUrl}
+                controls
+                onLoadedMetadata={onLoadedMetadata}
+                className="max-h-72 w-full rounded-md border border-zinc-900 bg-black"
+              />
+            ) : null}
+
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1">
-                <Label>Trim start ({trimStart.toFixed(1)}s)</Label>
+                <Label>
+                  Start ({trimStart.toFixed(1)}s)
+                </Label>
                 <input
                   type="range"
                   min={0}
@@ -226,7 +227,7 @@ export default function EditorPage() {
                 />
               </div>
               <div className="grid gap-1">
-                <Label>Trim end ({trimEnd.toFixed(1)}s)</Label>
+                <Label>End ({trimEnd.toFixed(1)}s)</Label>
                 <input
                   type="range"
                   min={0.1}
@@ -242,7 +243,7 @@ export default function EditorPage() {
               </div>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1">
                 <Label>Aspect</Label>
                 <select
@@ -250,43 +251,83 @@ export default function EditorPage() {
                   onChange={(e) => setAspect(e.target.value as EditorAspect)}
                   className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-sm"
                 >
-                  <option value="9:16">9:16 (Reels / Shorts / TikTok)</option>
-                  <option value="1:1">1:1 (Instagram feed)</option>
-                  <option value="16:9">16:9 (YouTube)</option>
-                  <option value="source">keep source</option>
+                  <option value="9:16">9:16 Shorts</option>
+                  <option value="1:1">1:1 Square</option>
+                  <option value="16:9">16:9 Wide</option>
+                  <option value="source">Keep source</option>
                 </select>
               </div>
               <div className="grid gap-1">
                 <Label>Captions</Label>
-                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <label className="flex h-9 items-center gap-2 text-sm text-zinc-300">
                   <input
                     type="checkbox"
                     checked={captions}
                     onChange={(e) => setCaptions(e.target.checked)}
                   />
-                  burn auto-captions
+                  Burn auto-captions
                 </label>
-              </div>
-              <div className="grid gap-1">
-                <Label>Language</Label>
-                <Input
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  placeholder="auto / en / es / …"
-                  disabled={!captions}
-                />
               </div>
             </div>
 
+            {showAdvanced ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1">
+                  <Label>Caption language</Label>
+                  <Input
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    placeholder="auto / en / es / …"
+                    disabled={!captions}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline"
+              >
+                {showAdvanced ? "hide advanced" : "advanced"}
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile(null);
+                    setJob(null);
+                  }}
+                  className="text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline"
+                >
+                  reset
+                </button>
+                <Button onClick={onSubmit} disabled={submitting} size="lg">
+                  {submitting ? "Submitting…" : "Export"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {job && job.status !== "complete" && job.status !== "failed" ? (
+        <Card className="mb-6">
+          <CardContent className="py-6">
             <div className="flex items-center gap-3">
-              <Button onClick={onSubmit} disabled={submitting}>
-                {submitting ? "Submitting…" : "Export clip"}
-              </Button>
-              {job ? (
-                <span className="text-xs text-zinc-500">
-                  {job.status} · {Math.round(job.progress * 100)}%
-                </span>
-              ) : null}
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-sm text-zinc-200">
+                {job.status === "pending"
+                  ? "Queued…"
+                  : "Rendering…"}
+              </span>
+            </div>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-900">
+              <div
+                className="h-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.round((job.progress ?? 0) * 100)}%` }}
+              />
             </div>
           </CardContent>
         </Card>
@@ -295,7 +336,7 @@ export default function EditorPage() {
       {job?.output_url ? (
         <Card>
           <CardHeader>
-            <CardTitle>3. Output</CardTitle>
+            <CardTitle>Done</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3">
             <video

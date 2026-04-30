@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 
 import { AppShell } from "@/components/app-shell";
@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -26,19 +25,36 @@ import {
 
 
 /**
- * Direct video-model generation page — Platform Phase 1.
+ * Prompt → video. Hero-first layout: prompt textarea + Generate is
+ * the only thing visible by default. The chosen model is auto-picked
+ * (highest-quality installed provider). Provider override + duration
+ * + fps + seed + aspect + image upload all sit behind an "Advanced"
+ * disclosure so a first-time user can ship a video without reading
+ * any technical labels.
  *
- * Lists every registered provider with its installed/missing state.
- * Disabled cards show the install command instead of a fake render
- * button. Selecting an installed provider unlocks the prompt form;
- * submitting enqueues a real worker job.
+ * Disabled state: when no provider is installed, the hero refuses to
+ * render the form and points the user at /settings/system instead.
  */
+
+// Quality preference order — first installed model wins as the
+// auto-pick. Wan 2.1 / Hunyuan are top-tier, then CogVideoX, then
+// SVD (img2vid → needs image), then SDXL parallax (CPU fallback).
+const QUALITY_ORDER: readonly string[] = [
+  "wan21",
+  "hunyuan",
+  "cogvideox",
+  "svd",
+  "sdxl_parallax",
+] as const;
+
+
 export default function GeneratePage() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
 
   const [models, setModels] = useState<VideoModelInfo[] | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -66,10 +82,12 @@ export default function GeneratePage() {
         if (!token) return;
         const res = await getVideoModels(token);
         setModels(res.providers);
+        if (!picked) setPicked(autoPickProvider(res.providers));
       } catch (e) {
         setLoadErr(e instanceof Error ? e.message : "load failed");
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, isSignedIn, getToken]);
 
   const startPolling = useCallback((jobId: string) => {
@@ -88,10 +106,24 @@ export default function GeneratePage() {
     }, 2500);
   }, [getToken]);
 
+  const installed = useMemo(
+    () => (models ?? []).filter((m) => m.installed),
+    [models],
+  );
   const pickedProvider = models?.find((m) => m.id === picked) ?? null;
+  const requiresImage = pickedProvider?.mode === "image-to-video";
 
   const onSubmit = async () => {
     if (!picked || !pickedProvider) return;
+    if (!prompt.trim()) {
+      setError("write a prompt first");
+      return;
+    }
+    if (requiresImage && !image) {
+      setError("this model needs a starter image — open Advanced to upload one");
+      setShowAdvanced(true);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setJob(null);
@@ -100,8 +132,7 @@ export default function GeneratePage() {
       if (!token) throw new Error("not signed in");
 
       let imageUrl: string | undefined;
-      if (pickedProvider.mode === "image-to-video") {
-        if (!image) throw new Error("this model requires an input image");
+      if (requiresImage && image) {
         const upload = await uploadFileDirect(image, "image", token);
         imageUrl = upload.public_url;
       }
@@ -109,7 +140,7 @@ export default function GeneratePage() {
       const created = await generateVideo(
         {
           provider_id: picked,
-          prompt: prompt || pickedProvider.name,
+          prompt,
           image_url: imageUrl,
           duration_seconds: duration,
           fps,
@@ -135,16 +166,41 @@ export default function GeneratePage() {
     );
   }
 
+  // No installed providers → don't pretend the form works.
+  if (models !== null && installed.length === 0) {
+    return (
+      <AppShell>
+        <h1 className="text-2xl font-semibold tracking-tight">Prompt → Video</h1>
+        <Card className="mt-4 border-amber-700/40 bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="text-base">No video models installed</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-amber-100/80">
+            <p>
+              Install at least one of: SDXL parallax, SVD, Wan 2.1, HunyuanVideo,
+              or CogVideoX. The /settings/system page lists each model&apos;s
+              install hint.
+            </p>
+            <a
+              href="/settings/system"
+              className="inline-block text-amber-200 underline-offset-4 hover:underline"
+            >
+              Open Setup Status →
+            </a>
+          </CardContent>
+        </Card>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Direct generation
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Prompt → Video
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-          Pick a video model, write a prompt, generate. Models that
-          aren't installed on this worker show their install command —
-          we never silently fall back to a different model.
+        <p className="mt-2 text-sm text-zinc-400">
+          Describe what you want to see. Hit Generate.
         </p>
       </div>
 
@@ -159,85 +215,93 @@ export default function GeneratePage() {
         </div>
       ) : null}
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>1. Pick a model</CardTitle>
-          <CardDescription>
-            {models
-              ? `${models.filter((m) => m.installed).length} of ${models.length} installed`
-              : "Loading registry…"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {(models ?? []).map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => m.installed && setPicked(m.id)}
-              disabled={!m.installed}
-              className={`text-left rounded-md border p-3 transition-colors ${
-                picked === m.id
-                  ? "border-emerald-700 bg-emerald-950/20"
-                  : "border-zinc-900 bg-zinc-950/40 hover:border-zinc-700"
-              } ${m.installed ? "" : "opacity-60 cursor-not-allowed"}`}
+      <Card className="mb-4">
+        <CardContent className="grid gap-4 pt-6">
+          <Textarea
+            placeholder="A neon-lit alley at night. Slow zoom in. Rain on the asphalt."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={4}
+            className="text-base"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-zinc-500">
+              Using:{" "}
+              <span className="text-zinc-200">
+                {pickedProvider?.name ?? "auto"}
+              </span>
+              {pickedProvider?.required_vram_gb
+                ? ` · ${pickedProvider.required_vram_gb} GB VRAM`
+                : null}
+              {" · "}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline"
+              >
+                {showAdvanced ? "hide advanced" : "advanced"}
+              </button>
+            </div>
+            <Button
+              onClick={onSubmit}
+              disabled={submitting || !prompt.trim() || !picked}
+              size="lg"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-zinc-100">
-                  {m.name}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
-                    m.installed
-                      ? "bg-emerald-950/50 text-emerald-300 border border-emerald-900"
-                      : "bg-zinc-900 text-zinc-400 border border-zinc-800"
-                  }`}
-                >
-                  {m.installed ? "ready" : "not installed"}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-zinc-500">
-                {m.mode}
-                {m.required_vram_gb > 0
-                  ? ` · ${m.required_vram_gb} GB VRAM`
-                  : null}
-              </p>
-              {m.description ? (
-                <p className="mt-1 text-xs text-zinc-400">{m.description}</p>
-              ) : null}
-              {!m.installed ? (
-                <p className="mt-2 text-[11px] text-zinc-500">
-                  install:{" "}
-                  <code className="rounded bg-zinc-900 px-1 py-0.5">
-                    {m.install_hint}
-                  </code>
-                </p>
-              ) : null}
-            </button>
-          ))}
+              {submitting ? "Submitting…" : "Generate"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {pickedProvider ? (
-        <Card className="mb-6">
+      {showAdvanced ? (
+        <Card className="mb-6 border-zinc-900">
           <CardHeader>
-            <CardTitle>2. Configure</CardTitle>
-            <CardDescription>
-              {pickedProvider.name} · {pickedProvider.mode}
-            </CardDescription>
+            <CardTitle className="text-sm font-medium text-zinc-300">
+              Advanced
+            </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1">
-              <Label>Prompt</Label>
-              <Textarea
-                placeholder="A neon-lit alley at night, slow zoom, cinematic"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
-              />
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Model</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(models ?? []).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => m.installed && setPicked(m.id)}
+                    disabled={!m.installed}
+                    className={`text-left rounded-md border p-2 text-sm transition-colors ${
+                      picked === m.id
+                        ? "border-emerald-700 bg-emerald-950/20"
+                        : "border-zinc-900 bg-zinc-950/40 hover:border-zinc-700"
+                    } ${m.installed ? "" : "opacity-60 cursor-not-allowed"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-zinc-100">{m.name}</span>
+                      {m.installed ? (
+                        <span className="text-[10px] uppercase text-emerald-300">
+                          ready
+                        </span>
+                      ) : (
+                        <span className="text-[10px] uppercase text-zinc-500">
+                          not installed
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {m.mode}
+                      {m.required_vram_gb > 0
+                        ? ` · ${m.required_vram_gb} GB`
+                        : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-            {pickedProvider.mode === "image-to-video" ? (
+
+            {requiresImage ? (
               <div className="grid gap-1">
-                <Label>Input image (required)</Label>
+                <Label>Starter image (required for this model)</Label>
                 <input
                   type="file"
                   accept="image/*"
@@ -246,6 +310,7 @@ export default function GeneratePage() {
                 />
               </div>
             ) : null}
+
             <div className="grid gap-2 sm:grid-cols-4">
               <div className="grid gap-1">
                 <Label>Duration (s)</Label>
@@ -274,53 +339,64 @@ export default function GeneratePage() {
                   onChange={(e) => setAspect(e.target.value as "9:16" | "1:1" | "16:9")}
                   className="h-9 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-sm"
                 >
-                  <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
-                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16 (Shorts)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                  <option value="16:9">16:9 (Landscape)</option>
                 </select>
               </div>
               <div className="grid gap-1">
                 <Label>Seed</Label>
                 <Input
-                  placeholder="optional"
+                  placeholder="random"
                   value={seed}
                   onChange={(e) => setSeed(e.target.value)}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3 pt-1">
-              <Button onClick={onSubmit} disabled={submitting || !prompt}>
-                {submitting ? "Submitting…" : "Generate"}
-              </Button>
-              {job ? (
-                <span className="text-xs text-zinc-500">
-                  {job.status} · {Math.round(job.progress * 100)}%
-                </span>
-              ) : null}
-            </div>
           </CardContent>
         </Card>
       ) : null}
 
-      {job?.output_url ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>3. Output</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <video
-              src={job.output_url}
-              controls
-              className="max-h-96 w-full rounded-md border border-zinc-900 bg-black"
-            />
-            <a
-              href={job.output_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-emerald-400 underline"
-            >
-              Download MP4 →
-            </a>
+      {job ? (
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            {!job.output_url && job.status !== "failed" ? (
+              <div className="flex items-center gap-3">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                <span className="text-sm text-zinc-300">
+                  {job.status === "pending"
+                    ? "Queued…"
+                    : `Rendering · ${Math.round(job.progress * 100)}%`}
+                </span>
+              </div>
+            ) : job.output_url ? (
+              <div className="grid gap-3">
+                <video
+                  src={job.output_url}
+                  controls
+                  className="max-h-96 w-full rounded-md border border-zinc-900 bg-black"
+                />
+                <div className="flex items-center gap-3">
+                  <a
+                    href={job.output_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-emerald-400 underline"
+                  >
+                    Download MP4 →
+                  </a>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setJob(null);
+                      setPrompt("");
+                    }}
+                  >
+                    Generate another
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -334,4 +410,16 @@ export default function GeneratePage() {
       ) : null}
     </AppShell>
   );
+}
+
+
+function autoPickProvider(providers: readonly VideoModelInfo[]): string | null {
+  // Prefer the highest-quality installed model so first-time users
+  // get the best result with no clicks. Falls back to any installed.
+  for (const id of QUALITY_ORDER) {
+    const found = providers.find((p) => p.id === id && p.installed);
+    if (found) return found.id;
+  }
+  const first = providers.find((p) => p.installed);
+  return first?.id ?? null;
 }

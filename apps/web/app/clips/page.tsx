@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -26,15 +25,11 @@ import {
 
 
 /**
- * AI Clipper page — Platform Phase 1.
- *
- * Drag a long video / audio file in → upload via presigned PUT →
- * POST /api/clips/analyze → poll /api/clips/{id} until status=complete →
- * surface the scored moments → user picks one and an aspect →
- * POST /api/clips/{id}/export → poll the artifact until url is ready →
- * link to the finished MP4.
- *
- * Every action backed by a real worker step. No fake "preview".
+ * Long video → clips. Three-step UX: upload, the worker auto-detects
+ * the strongest moments, click one to export. Internal scoring
+ * dimensions are hidden — we surface a single quality indicator
+ * (Strong / Solid / Worth a look) so the page reads like a product
+ * tool, not a dashboard.
  */
 export default function ClipsPage() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -82,7 +77,7 @@ export default function ClipsPage() {
         if (!token) return;
         setArtifacts(await listClipArtifacts(jobId, token));
       } catch {
-        // ignore — keep last known list
+        /* keep last known */
       }
     };
     void tick();
@@ -90,7 +85,6 @@ export default function ClipsPage() {
     return () => clearInterval(id);
   }, [getToken]);
 
-  // Whenever a job becomes complete, start polling its artifacts list.
   useEffect(() => {
     if (job?.status !== "complete") return;
     return startPollingArtifacts(job.job_id);
@@ -152,13 +146,13 @@ export default function ClipsPage() {
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">AI Clipper</h1>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-          Upload a long video or audio file. The clipper transcribes,
-          finds the strongest moments, scores them across seven
-          dimensions, and exports captioned shorts in your chosen
-          aspect ratio.
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Long video → Clips
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+          Drop in a podcast, stream, or any long video. We&apos;ll find the
+          strongest 30-60 second moments and export them as captioned shorts.
         </p>
       </div>
 
@@ -168,59 +162,64 @@ export default function ClipsPage() {
         </div>
       ) : null}
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>1. Upload source media</CardTitle>
-          <CardDescription>
-            mp4 / mov / mp3 / wav up to 1 GB. We send it directly to
-            object storage with a presigned PUT — the browser is the
-            uploader.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <input
-            type="file"
-            accept="video/*,audio/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-zinc-100 hover:file:bg-zinc-700"
-          />
-          {file ? (
-            <p className="text-xs text-zinc-500">
-              {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB ·
-              {" "}{file.type || "unknown type"}
-            </p>
-          ) : null}
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={onAnalyze}
-              disabled={!file || uploading || analyzing}
+      {/* Upload step. Hidden once an analysis is in progress or done. */}
+      {!job ? (
+        <Card className="mb-6">
+          <CardContent className="grid gap-4 pt-6">
+            <label
+              htmlFor="clip-source"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-zinc-800 bg-zinc-950/40 px-6 py-12 text-center transition hover:border-zinc-700"
             >
-              {uploading
-                ? "Uploading…"
-                : analyzing
-                  ? "Starting analysis…"
-                  : "Analyze for viral moments"}
-            </Button>
-            {job ? (
-              <span className="text-xs text-zinc-500">
-                job {job.job_id.slice(0, 12)}… · {job.status} ·{" "}
-                {Math.round((job.progress ?? 0) * 100)}%
+              <span className="text-3xl">📥</span>
+              <span className="text-sm font-medium text-zinc-100">
+                {file ? file.name : "Click to choose a video or audio file"}
               </span>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+              <span className="text-xs text-zinc-500">
+                {file
+                  ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                  : "MP4, MOV, MP3, WAV — up to 1 GB"}
+              </span>
+              <input
+                id="clip-source"
+                type="file"
+                accept="video/*,audio/*"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <div className="flex justify-end">
+              <Button
+                onClick={onAnalyze}
+                disabled={!file || uploading || analyzing}
+                size="lg"
+              >
+                {uploading
+                  ? "Uploading…"
+                  : analyzing
+                    ? "Starting analysis…"
+                    : "Find clips"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
+      {/* Progress / failed states. */}
       {job?.status === "running" || job?.status === "pending" ? (
         <Card className="mb-6">
-          <CardContent className="py-6 text-sm text-zinc-300">
-            <p>
-              {job.status === "pending" ? "Queued…" : "Transcribing + scoring."}
-            </p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-900">
+          <CardContent className="py-8">
+            <div className="flex items-center gap-3">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-sm text-zinc-200">
+                {job.status === "pending"
+                  ? "Queued…"
+                  : "Transcribing and finding moments…"}
+              </span>
+            </div>
+            <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-zinc-900">
               <div
                 className="h-full bg-emerald-500 transition-all"
-                style={{ width: `${Math.round(job.progress * 100)}%` }}
+                style={{ width: `${Math.round((job.progress ?? 0) * 100)}%` }}
               />
             </div>
           </CardContent>
@@ -230,45 +229,59 @@ export default function ClipsPage() {
       {job?.status === "failed" ? (
         <Card className="mb-6 border-red-900">
           <CardContent className="py-4 text-sm text-red-200">
-            <p className="font-medium">Analysis failed.</p>
+            <p className="font-medium">Couldn&apos;t analyze this file.</p>
             <p className="mt-1 text-xs">{job.error}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setJob(null);
+                setFile(null);
+              }}
+              className="mt-3 text-xs text-red-300 underline-offset-4 hover:underline"
+            >
+              Try another file →
+            </button>
           </CardContent>
         </Card>
       ) : null}
 
+      {/* Moment list */}
       {job?.status === "complete" ? (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>
-              2. {job.moments.length} viral moments detected
+              {job.moments.length === 0
+                ? "No moments long enough were found"
+                : `${job.moments.length} clips ready`}
             </CardTitle>
-            <CardDescription>
-              Sorted by score. Pick aspect + captions toggle to export.
-              {job.duration_sec
-                ? ` (source: ${Math.round(job.duration_sec)}s)`
-                : null}
-            </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid gap-3">
+            {job.moments.map((m) => (
+              <MomentRow key={m.moment_id} moment={m} onExport={onExport} />
+            ))}
             {job.moments.length === 0 ? (
-              <p className="text-sm text-zinc-400">
-                No moments long enough were found in this source.
-              </p>
-            ) : (
-              job.moments.map((m) => (
-                <MomentRow key={m.moment_id} moment={m} onExport={onExport} />
-              ))
-            )}
+              <button
+                type="button"
+                onClick={() => {
+                  setJob(null);
+                  setFile(null);
+                }}
+                className="text-sm text-zinc-300 underline-offset-4 hover:underline"
+              >
+                Try another file →
+              </button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
 
+      {/* Exports */}
       {artifacts.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>3. Exports</CardTitle>
+            <CardTitle>Exports</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid gap-2">
             {artifacts.map((a) => (
               <ArtifactRow key={a.id} artifact={a} />
             ))}
@@ -280,6 +293,14 @@ export default function ClipsPage() {
 }
 
 
+function qualityLabel(score: number): { label: string; tone: string } {
+  // Convert raw 0..1 score → human band. Hides the dimension breakdown.
+  if (score >= 0.78) return { label: "🔥 Strong", tone: "text-emerald-300" };
+  if (score >= 0.6) return { label: "✓ Solid", tone: "text-emerald-300/80" };
+  return { label: "Worth a look", tone: "text-zinc-400" };
+}
+
+
 function MomentRow({
   moment, onExport,
 }: {
@@ -288,33 +309,29 @@ function MomentRow({
 }) {
   const [aspect, setAspect] = useState<ExportAspect>("9:16");
   const [captions, setCaptions] = useState(true);
-  const dims = moment.score_breakdown;
+  const [submitted, setSubmitted] = useState(false);
   const dur = Math.round(moment.duration);
+  const q = qualityLabel(moment.score);
+
+  const handleExport = () => {
+    setSubmitted(true);
+    onExport(moment, aspect, captions);
+  };
+
   return (
-    <div className="rounded-md border border-zinc-900 bg-zinc-950/40 p-3">
+    <div className="rounded-md border border-zinc-900 bg-zinc-950/40 p-4 transition-colors hover:border-zinc-800">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3 text-xs text-zinc-500">
             <span>
               {fmt(moment.start)}–{fmt(moment.end)} · {dur}s
             </span>
-            <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px]">
-              score {(moment.score * 100).toFixed(0)}
-            </span>
+            <span className={q.tone}>{q.label}</span>
           </div>
-          <p className="mt-1 line-clamp-3 text-sm text-zinc-200">
+          <p className="mt-2 line-clamp-3 text-sm text-zinc-200">
             {moment.text}
           </p>
         </div>
-      </div>
-      <div className="mt-2 grid grid-cols-7 gap-1 text-[10px]">
-        <Bar label="hook" v={dims.hook_strength} />
-        <Bar label="emo" v={dims.emotional_spike} />
-        <Bar label="ctrv" v={dims.controversy} />
-        <Bar label="clr" v={dims.clarity} />
-        <Bar label="len" v={dims.length_fit} />
-        <Bar label="erg" v={dims.speaker_energy} />
-        <Bar label="cap" v={dims.caption_potential} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <select
@@ -322,43 +339,25 @@ function MomentRow({
           onChange={(e) => setAspect(e.target.value as ExportAspect)}
           className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs"
         >
-          <option value="9:16">9:16</option>
-          <option value="1:1">1:1</option>
-          <option value="16:9">16:9</option>
+          <option value="9:16">9:16 Shorts</option>
+          <option value="1:1">1:1 Square</option>
+          <option value="16:9">16:9 Wide</option>
         </select>
-        <label className="flex items-center gap-1 text-xs text-zinc-400">
+        <label className="flex items-center gap-1.5 text-xs text-zinc-400">
           <input
             type="checkbox"
             checked={captions}
             onChange={(e) => setCaptions(e.target.checked)}
           />
-          captions
+          Burn captions
         </label>
         <Button
           size="sm"
-          onClick={() => onExport(moment, aspect, captions)}
+          onClick={handleExport}
+          disabled={submitted}
         >
-          Export clip
+          {submitted ? "Exporting…" : "Export"}
         </Button>
-      </div>
-    </div>
-  );
-}
-
-
-function Bar({ label, v }: { label: string; v: number }) {
-  const pct = Math.max(0, Math.min(1, v));
-  return (
-    <div>
-      <div className="flex items-center justify-between text-[9px] text-zinc-500">
-        <span>{label}</span>
-        <span>{Math.round(pct * 100)}</span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-900">
-        <div
-          className="h-full bg-emerald-500"
-          style={{ width: `${pct * 100}%` }}
-        />
       </div>
     </div>
   );
@@ -367,31 +366,27 @@ function Bar({ label, v }: { label: string; v: number }) {
 
 function ArtifactRow({ artifact }: { artifact: ClipArtifact }) {
   return (
-    <div className="rounded-md border border-zinc-900 bg-zinc-950/40 p-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm">
-          <span className="text-zinc-200">{artifact.aspect}</span>
-          <span className="ml-2 text-xs text-zinc-500">
-            {fmt(artifact.start_sec)}–{fmt(artifact.end_sec)}
-          </span>
-        </div>
-        <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] uppercase tracking-wider text-zinc-400">
-          {artifact.status}
+    <div className="flex items-center justify-between rounded-md border border-zinc-900 bg-zinc-950/40 p-3">
+      <div className="text-sm">
+        <span className="text-zinc-200">{artifact.aspect}</span>
+        <span className="ml-2 text-xs text-zinc-500">
+          {fmt(artifact.start_sec)}–{fmt(artifact.end_sec)}
         </span>
       </div>
       {artifact.url ? (
         <a
           href={artifact.url}
-          className="mt-2 inline-block text-xs text-emerald-400 underline"
+          className="text-xs text-emerald-400 underline"
           target="_blank"
           rel="noreferrer"
         >
-          Download MP4 →
+          Download →
         </a>
-      ) : null}
-      {artifact.error ? (
-        <p className="mt-1 text-xs text-red-300">{artifact.error}</p>
-      ) : null}
+      ) : artifact.error ? (
+        <span className="text-xs text-red-300">{artifact.error}</span>
+      ) : (
+        <span className="text-xs text-zinc-500">{artifact.status}…</span>
+      )}
     </div>
   );
 }
