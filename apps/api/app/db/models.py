@@ -286,6 +286,113 @@ class BrandKit(Base):
         default=_utcnow, onupdate=_utcnow,
     )
 
+
+class SavedPrompt(Base):
+    """Phase 9 — saved prompt / template-preset.
+
+    A reusable saved configuration. ``template`` is the template id
+    (one of the 10 templates), ``template_input`` is the saved form
+    payload. ``label`` is the human-readable name; ``last_used_at``
+    is updated whenever the operator duplicates / reuses it so the
+    dashboard can surface their most-used presets.
+    """
+    __tablename__ = "saved_prompts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    template: Mapped[str] = mapped_column(
+        String(32), index=True, nullable=False,
+    )
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    template_input: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict,
+    )
+    use_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0,
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class RenderShare(Base):
+    """Phase 13 — public share link for a completed render.
+
+    One row per active link (the owner can rotate by deleting + creating).
+    Token is a long URL-safe string used as the public key. ``is_active``
+    + ``expires_at`` are checked on every public read so a disabled
+    link returns 404 immediately.
+    """
+    __tablename__ = "render_shares"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    render_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("renders.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    token: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False, default=True,
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+
+
+class RenderArtifact(Base):
+    """Phase 13.5 — extra exports derived from a completed render.
+
+    Each row is one re-exported artifact (different aspect ratio,
+    captions on/off). ``url`` is the R2/MinIO public URL just like
+    ``renders.final_mp4_url``. ``kind`` is currently always
+    ``"export_variant"`` but kept as a String to make space for future
+    derived assets (thumbnails, GIF previews, audio rips).
+    """
+    __tablename__ = "render_artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4,
+    )
+    render_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("renders.id", ondelete="CASCADE"),
+        index=True, nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    aspect: Mapped[str] = mapped_column(String(8), nullable=False)
+    captions: Mapped[bool] = mapped_column(nullable=False, default=True)
+    url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending",
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow,
+    )
+
+
 class ClipJob(Base):
     """AI Clipper analyze job — Phase 1 (Platform).
 
@@ -583,7 +690,6 @@ class EditorJob(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
-
 
 
 class MediaAsset(Base):
