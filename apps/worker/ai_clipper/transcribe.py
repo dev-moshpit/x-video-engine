@@ -121,7 +121,7 @@ def transcribe_full(
     work_dir: Path,
     language: str = "auto",
     model_name: Optional[str] = None,
-    device: str = "auto",
+    device: Optional[str] = None,
     beam_size: int = 1,
 ) -> Transcript:
     """Transcribe a full upload into segments with word timings.
@@ -131,12 +131,22 @@ def transcribe_full(
     default — operators tuning quality can pass higher via env or
     explicit arg.
 
+    Device selection: ``device=None`` (the default) reads
+    ``XVE_WHISPER_DEVICE`` from env, falling back to ``cpu``. CPU is
+    the safe default because the CTranslate2 GPU backend requires
+    cuBLAS / cuDNN DLLs that aren't on PATH on a stock CUDA install
+    (the typical failure is ``cublas64_12.dll not found``). Operators
+    with a working CUDA toolkit can opt in via
+    ``XVE_WHISPER_DEVICE=cuda``.
+
     Raises :class:`WhisperUnavailable` if faster-whisper isn't
     installed; callers (the api router) translate to a 503.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     audio = _extract_audio(media, work_dir)
     name = model_name or _resolve_default_model(language)
+    if device is None:
+        device = os.environ.get("XVE_WHISPER_DEVICE", "cpu").strip() or "cpu"
     compute_type = "int8" if device in ("cpu", "auto") else "float16"
     model = _get_model(name, device, compute_type)
 

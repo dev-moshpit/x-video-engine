@@ -104,18 +104,25 @@ def transcribe_to_words(
     language: str,
     work_dir: Path,
     model_name: Optional[str] = None,
-    device: str = "auto",
+    device: Optional[str] = None,
 ) -> tuple[Path, float, list["WordEvent"]]:
     """Transcribe ``media`` and return (audio_wav, duration, words).
 
     ``words`` are the per-word timing events ready to feed
     :func:`xvideo.post.word_captions.build_ass`. Empty list if Whisper
     couldn't extract any words.
+
+    ``device=None`` reads ``XVE_WHISPER_DEVICE`` from env, defaulting
+    to ``cpu``. The CTranslate2 GPU backend needs cuBLAS/cuDNN DLLs
+    that aren't on PATH on a stock CUDA install, so CPU is safer.
     """
+    import os
     from xvideo.post.tts import WordEvent  # local to avoid cycle on test
 
     audio = _extract_audio_track(media, work_dir)
     name = model_name or _resolve_model_for_language(language)
+    if device is None:
+        device = os.environ.get("XVE_WHISPER_DEVICE", "cpu").strip() or "cpu"
 
     # int8 is the safest CPU compute_type — float16 needs CUDA.
     compute_type = "int8" if device in ("cpu", "auto") else "float16"
