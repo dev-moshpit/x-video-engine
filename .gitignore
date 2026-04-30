@@ -35,3 +35,4 @@ out/
 .claude/
 runs/
 dev.db
+docker-install*.log

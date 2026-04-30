@@ -1,36 +1,124 @@
-# Engine default configuration.
+# LowPoly Video Engine — default configuration.
 
 engine:
-  version: "0.0.1"
-  default_mode: "t2v"
-  default_resolution: "720p"
+  version: "0.3.0"
+  default_resolution: "480p"
   default_fps: 24
   default_aspect_ratio: "16:9"
-  default_duration_sec: 5.0
+  default_duration_sec: 2.0
+  default_style_preset: "crystal"
+  default_render_lane: "preview"
 
-reranker:
+# Hardware profiles — lane settings scale to detected VRAM.
+# The engine auto-detects GPU tier on startup.
+#   laptop_4gb:   GTX 1650 4GB — minimum viable, postprocess does heavy lifting
+#   desktop_8gb:  RTX 2080 8GB — comfortable, more candidates and steps
+#   cloud:        16GB+ — unconstrained, inherits desktop defaults
+hardware:
+  laptop_4gb:
+    preview:
+      resolution: "480p"
+      duration_sec: 2.0
+      num_candidates: 1
+      num_inference_steps: 15
+      guidance_scale: 6.0
+      postprocess_enabled: false
+    standard:
+      resolution: "480p"
+      duration_sec: 3.0
+      num_candidates: 1
+      num_inference_steps: 20
+      guidance_scale: 7.0
+      postprocess_enabled: true       # postprocess compensates for fewer steps
+    fidelity:
+      resolution: "480p"
+      duration_sec: 3.0
+      num_candidates: 2
+      num_inference_steps: 25
+      guidance_scale: 7.5
+      postprocess_enabled: true
+  desktop_8gb:
+    preview:
+      resolution: "480p"
+      duration_sec: 3.0
+      num_candidates: 1
+      num_inference_steps: 20
+      guidance_scale: 6.0
+      postprocess_enabled: false
+    standard:
+      resolution: "480p"
+      duration_sec: 4.0
+      num_candidates: 2
+      num_inference_steps: 25
+      guidance_scale: 7.0
+      postprocess_enabled: false
+    fidelity:
+      resolution: "480p"
+      duration_sec: 4.0
+      num_candidates: 3
+      num_inference_steps: 30
+      guidance_scale: 7.5
+      postprocess_enabled: true
+
+generation:
+  num_inference_steps: 20
+  guidance_scale: 7.0
+  max_duration_sec: 5.0
+
+policy:
+  reject_floor: 0.25
+  salvage_ceiling: 0.45
+
+scorer:
   enabled: true
-  default_num_candidates: 1          # 1 = no reranking, just one take
+  default_num_candidates: 1
   hero_num_candidates: 4
   clip_model: "ViT-L-14"
   clip_device: "cpu"
+  postprocess_improvement_threshold: 0.03
   weights:
-    prompt_alignment: 0.25
-    subject_consistency: 0.20
-    motion_smoothness: 0.15
-    artifact_rate: 0.15
-    camera_obedience: 0.10
-    reference_similarity: 0.15
+    facet_clarity: 0.30
+    palette_cohesion: 0.20
+    prompt_alignment: 0.20
+    edge_stability: 0.15
+    stylization_strength: 0.15
+  diagnostics:
+    palette_cohesion_min: 0.35
+    facet_clarity_min: 0.25
+    stylization_strength_min: 0.30
+    edge_stability_min: 0.25
+    prompt_alignment_min: 0.20
 
-cleanup:
-  enabled: false                     # phase 6 feature
-  enable_sr: false
-  enable_face_restore: false
-  enable_deflicker: false
+postprocess:
+  enabled: false
+  palette_quantize: true
+  quantize_colors: 8
+  quantize_temporal_lock: true
+  posterize: false
+  posterize_levels: 6
+  edge_sharpen: true
+  edge_boost: 0.3
+
+salvage:
+  enabled: true
+  strategies:
+    - name: strong_quantize
+      palette_quantize: true
+      quantize_colors: 6
+      edge_sharpen: true
+      edge_boost: 0.4
+    - name: heavy_posterize
+      posterize: true
+      posterize_levels: 4
+      palette_quantize: true
+      quantize_colors: 8
+    - name: max_salvage
+      palette_quantize: true
+      quantize_colors: 5
+      posterize: true
+      posterize_levels: 5
+      edge_sharpen: true
+      edge_boost: 0.5
 
 audio:
-  enabled: false                     # phase 7 feature
-
-planner:
-  provider: "anthropic"              # anthropic | local_qwen
-  model: "claude-sonnet-4-6"
+  enabled: false

@@ -13,7 +13,12 @@ const isProtected = createRouteMatcher([
   "/projects(.*)",
   "/create(.*)",
   "/library(.*)",
+  "/presets(.*)",
   "/settings(.*)",
+  "/clips(.*)",
+  "/editor(.*)",
+  "/generate(.*)",
+  "/presenter(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

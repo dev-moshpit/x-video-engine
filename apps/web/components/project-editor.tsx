@@ -59,11 +59,11 @@ const BG_URL_FIELD: Record<Template, string | null> = {
   reddit_story: null,
   voiceover: "background_url",
   auto_captions: "video_url",
-  fake_text: null,
-  would_you_rather: null,
+  fake_text: "background_url",
+  would_you_rather: "background_url",
   split_video: "main_url",
-  twitter: null,
-  top_five: null,
+  twitter: "background_url",
+  top_five: "background_url",
   roblox_rant: "background_url",
 };
 
