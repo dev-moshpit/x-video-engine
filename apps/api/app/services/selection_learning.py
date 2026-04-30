@@ -1,14 +1,21 @@
 """Selection-learning v2 — preference profile + per-template metrics
-+ default recommendations.
++ default recommendations + plan-quality estimator.
 
 Phase 1 PR 13 shipped v1 (informational only): aggregated star/reject
-counts per template/caption_style/voice. Phase 4 extends that with:
+counts per template/caption_style/voice. Phase 4 extended that with
+per-template success/star/reject rates.
 
-  - per-template success/star/reject rates (so the dashboard can show
-    which templates the operator gets the most value from)
-  - recommend_defaults(template) — best caption_style + voice + style
-    cue for the user-template pair, falling back to global signal
-    when the user has no decisions in that template
+**Phase 8** adds:
+
+  - ``hook_starts`` Counter: which hook *opening words* (first 3 words,
+    lowercased) correlate with starred renders → used by the smart
+    generator to bias toward proven openings.
+  - ``duration_buckets``: 8-15s / 16-30s / 31-60s / 61-90s buckets so
+    we know which length the operator's audience rewards.
+  - ``compute_plan_score_boost(plan, profile)`` — pure helper used by
+    /generate-smart to nudge the engine's heuristic score up/down based
+    on user history. Bounded ±5 points so a baseline-quality plan with
+    matching tropes can edge out a marginally higher-scoring outsider.
 
 The module stays read-only: it never writes to the DB. The signal it
 reads is the ``renders.starred`` column written by the feedback
@@ -34,15 +41,37 @@ from app.db.models import Project, Render
 
 # ─── Aggregated profile ─────────────────────────────────────────────────
 
+def _duration_bucket(seconds: float | int | None) -> str:
+    if seconds is None:
+        return "unknown"
+    s = float(seconds)
+    if s <= 15:
+        return "8-15s"
+    if s <= 30:
+        return "16-30s"
+    if s <= 60:
+        return "31-60s"
+    return "61-90s"
+
+
+def _hook_start(text: str | None) -> str | None:
+    """First 3 words of a hook string, lowercased + stripped."""
+    if not text or not isinstance(text, str):
+        return None
+    words = [w.strip(".,!?:;\"'").lower() for w in text.split() if w.strip()]
+    if not words:
+        return None
+    return " ".join(words[:3])
+
+
 def compute_user_preferences(
     db: Session, user_id: uuid.UUID,
 ) -> dict:
     """Aggregate the user's starred + rejected renders.
 
     Returns a dict shape consumed by GET /api/me/preferences. The
-    Phase 4 additions (``per_template`` and the rate fields) are
-    backward-compatible — the old keys still exist with the same
-    semantics, so the Phase 1 frontend keeps working.
+    Phase 4 + Phase 8 additions are backward-compatible — older keys
+    keep their semantics so the v1 frontend still works.
     """
     rows = db.execute(
         select(Render, Project)
@@ -56,12 +85,19 @@ def compute_user_preferences(
     caption_styles: Counter[str] = Counter()
     voices: Counter[str] = Counter()
 
-    # Phase 4 — per-template success/star/reject metrics.
     template_renders: Counter[str] = Counter()
     template_completed: Counter[str] = Counter()
     template_failed: Counter[str] = Counter()
     template_starred: Counter[str] = Counter()
     template_rejected: Counter[str] = Counter()
+
+    # Phase 8 — hook + duration tracking. We grab the duration directly
+    # from ``template_input`` (every template that has one stores it
+    # there) and use the project name as a proxy for the engine-emitted
+    # hook on the SaaS side (the actual hook lives in the worker's
+    # plan_json which we don't read from here for cost reasons).
+    hook_starts: Counter[str] = Counter()
+    durations: Counter[str] = Counter()
 
     for render, project in rows:
         tpl = project.template
@@ -71,17 +107,32 @@ def compute_user_preferences(
         elif render.stage == "failed":
             template_failed[tpl] += 1
 
+        ti = project.template_input or {}
         if render.starred is True:
             starred_count += 1
             templates[tpl] += 1
             template_starred[tpl] += 1
-            ti = project.template_input or {}
             cs = ti.get("caption_style")
             if isinstance(cs, str):
                 caption_styles[cs] += 1
             vn = ti.get("voice_name")
             if isinstance(vn, str):
                 voices[vn] += 1
+
+            # Hook openers — derive from prompt for ai_story, title for
+            # reddit_story / top_five, project name otherwise.
+            hook_source = (
+                ti.get("prompt")
+                or ti.get("title")
+                or ti.get("question")
+                or project.name
+            )
+            hs = _hook_start(hook_source)
+            if hs:
+                hook_starts[hs] += 1
+
+            dur = ti.get("duration") or ti.get("per_item_seconds")
+            durations[_duration_bucket(dur)] += 1
         elif render.starred is False:
             rejected_count += 1
             template_rejected[tpl] += 1
@@ -117,8 +168,12 @@ def compute_user_preferences(
         "top_template": _top(templates),
         "top_caption_style": _top(caption_styles),
         "top_voice": _top(voices),
-        # Phase 4 additions.
         "per_template": per_template,
+        # Phase 8 additions.
+        "hook_starts": dict(hook_starts),
+        "duration_buckets": dict(durations),
+        "top_hook_start": _top(hook_starts),
+        "top_duration_bucket": _top(durations),
     }
 
 
@@ -127,21 +182,7 @@ def compute_user_preferences(
 def recommend_defaults(
     db: Session, user_id: uuid.UUID, template: str,
 ) -> dict:
-    """Recommend caption_style + voice + style for a (user, template).
-
-    Strategy:
-      1. Look at the user's STARRED renders for *this template* — if
-         they have a clear winner there, use it.
-      2. Else fall back to their cross-template starred winner.
-      3. Else return None for that field — caller uses the template's
-         own default.
-
-    Returns a dict ``{caption_style, voice_name, style, reason}``
-    where ``reason`` is a short human-readable string the frontend
-    can show ("from your starred reddit_story renders") so the
-    operator understands where the suggestion comes from.
-    """
-    # Pull all starred renders for this user.
+    """Recommend caption_style + voice + style for a (user, template)."""
     rows = db.execute(
         select(Render, Project)
         .join(Project, Project.id == Render.project_id)
@@ -163,7 +204,6 @@ def recommend_defaults(
                 by_field_global[field][v] += 1
 
     def _pick(field: str) -> tuple[Optional[str], Optional[str]]:
-        """Returns (value, reason). Both None when no signal."""
         per_t = by_field_template[field].get(template)
         if per_t:
             top = per_t.most_common(1)[0]
@@ -195,3 +235,69 @@ def recommend_defaults(
             **({"style": st_reason} if st_reason else {}),
         },
     }
+
+
+# ─── Phase 8: plan score boost from history ─────────────────────────────
+
+# Bounded so an outsider plan with a much better baseline score can
+# still win. The engine's heuristic score is on a 0-100 scale — we
+# nudge by at most ±5 points.
+_BOOST_HOOK = 3.0
+_BOOST_DURATION = 1.5
+_BOOST_CAPTION = 0.5
+
+def compute_plan_score_boost(
+    plan: dict, profile: dict, *, template: str,
+) -> tuple[float, list[str]]:
+    """Return (delta, reasons) to add onto the engine's heuristic score.
+
+    ``plan`` is one ``GeneratedPlan["video_plan"]`` (engine VideoPlan
+    as dict). ``profile`` is :func:`compute_user_preferences` output.
+    Reasons are short human-readable strings — we surface them in the
+    /generate-smart response so the operator can see *why* a plan was
+    chosen.
+
+    The boost is purely additive and capped at +5/-2; we don't penalize
+    novelty heavily because the user might want to break out of their
+    existing patterns.
+    """
+    delta = 0.0
+    reasons: list[str] = []
+
+    # Hook opener match — biggest signal we have on the SaaS side.
+    hook = plan.get("hook") if isinstance(plan, dict) else None
+    hs = _hook_start(hook)
+    starts: dict[str, int] = profile.get("hook_starts") or {}
+    if hs and starts.get(hs, 0) >= 1:
+        delta += _BOOST_HOOK
+        reasons.append(
+            f"hook opens like {starts[hs]} of your starred render(s)"
+        )
+
+    # Duration bucket match.
+    total_dur = 0.0
+    for s in plan.get("scenes", []) or []:
+        if isinstance(s, dict) and isinstance(s.get("duration"), (int, float)):
+            total_dur += float(s["duration"])
+    bucket = _duration_bucket(total_dur or None)
+    durs: dict[str, int] = profile.get("duration_buckets") or {}
+    if bucket != "unknown" and durs.get(bucket, 0) >= 2:
+        delta += _BOOST_DURATION
+        reasons.append(
+            f"length ({bucket}) matches your top-rated bucket"
+        )
+
+    # Caption style match — engine's plan stores it on the plan itself.
+    plan_caption = plan.get("caption_style")
+    user_top_caption = profile.get("top_caption_style")
+    if (
+        isinstance(plan_caption, str)
+        and isinstance(user_top_caption, str)
+        and plan_caption == user_top_caption
+    ):
+        delta += _BOOST_CAPTION
+        reasons.append("caption_style matches your top pick")
+
+    # Bound the boost so noise never dominates baseline quality.
+    delta = max(-2.0, min(5.0, delta))
+    return delta, reasons

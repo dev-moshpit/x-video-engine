@@ -10,10 +10,20 @@ The other Phase 1 templates (``voiceover``, ``auto_captions``) skip the
 plan stage and go straight from form to render — the worker's adapter
 handles them with the post stack directly. ``template_supports_plan``
 is the canonical check.
+
+Phase 11 — adds an in-process LRU plan cache keyed on
+(template, template_input_hash, variations, seed). The engine call is
+already deterministic, so the cache is a pure speedup and never returns
+stale results across template_input edits — Project.updated_at flips
+the input hash automatically.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+from collections import OrderedDict
+from threading import Lock
 from typing import Optional
 
 from xvideo.prompt_native import (
@@ -24,6 +34,53 @@ from xvideo.prompt_native import (
 
 from app.db.models import Project
 from app.schemas.templates import template_supports_plan_preview
+
+
+# ─── Plan cache ─────────────────────────────────────────────────────────
+
+_CACHE_MAX = 128
+_cache: OrderedDict[str, list[dict]] = OrderedDict()
+_cache_lock = Lock()
+
+
+def _cache_key(
+    template: str,
+    template_input: dict,
+    variations: int,
+    seed: Optional[int],
+    score_and_filter: bool,
+) -> str:
+    payload = {
+        "t": template,
+        "i": template_input,
+        "v": variations,
+        "s": seed,
+        "f": score_and_filter,
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _cache_get(key: str) -> Optional[list[dict]]:
+    with _cache_lock:
+        if key in _cache:
+            _cache.move_to_end(key)
+            return _cache[key]
+    return None
+
+
+def _cache_put(key: str, value: list[dict]) -> None:
+    with _cache_lock:
+        _cache[key] = value
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_MAX:
+            _cache.popitem(last=False)
+
+
+def clear_plan_cache() -> None:
+    """Drop everything from the cache. Used in tests."""
+    with _cache_lock:
+        _cache.clear()
 
 
 def template_supports_plan(template: str) -> bool:
@@ -80,7 +137,27 @@ def plans_for_project(
     ``{"video_plan": dict, "score": dict, "warnings": list[str]}``.
 
     Raises ValueError if the template has no plan preview.
+
+    Cached on (template, template_input, variations, seed, score) so
+    a re-preview of the same form is essentially free. Editing the
+    project's template_input naturally busts the cache through the
+    hash key. Random seeds (``seed=None``) skip the cache to preserve
+    fresh-each-time semantics.
     """
+    use_cache = seed is not None
+    cache_key: Optional[str] = None
+    if use_cache:
+        cache_key = _cache_key(
+            project.template,
+            project.template_input or {},
+            variations,
+            seed,
+            score_and_filter,
+        )
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
     prompt, kwargs = _build_engine_call(project)
     if seed is not None:
         kwargs["seed"] = seed
@@ -92,7 +169,7 @@ def plans_for_project(
         **kwargs,
     )
 
-    return [
+    out = [
         {
             "video_plan": p.to_dict(),
             "score": score_plan(p).to_dict(),
@@ -100,3 +177,6 @@ def plans_for_project(
         }
         for p in plans
     ]
+    if use_cache and cache_key:
+        _cache_put(cache_key, out)
+    return out

@@ -32,8 +32,8 @@ httpx>=0.27
 # STRIPE_SECRET_KEY env var is missing OR this SDK isn't importable,
 # and the routers translate that to a 503. Pinning here so production
 # deploys have it; local dev can omit the install if not testing
-# checkout.
-stripe>=8.0
+# checkout. Pinned to a known-good major (10.x) for production parity.
+stripe>=10.0,<13.0
 
 # Clerk JWT verification (PR 2): RS256 + JWKS
 pyjwt[crypto]>=2.8

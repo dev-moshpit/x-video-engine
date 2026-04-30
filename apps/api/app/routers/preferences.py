@@ -50,6 +50,11 @@ class PreferenceProfile(BaseModel):
     top_voice: Optional[str] = None
     # Phase 4 — per-template breakdown.
     per_template: dict[str, TemplateMetrics] = Field(default_factory=dict)
+    # Phase 8 — hook + duration intelligence (read-only signals).
+    hook_starts: dict[str, int] = Field(default_factory=dict)
+    duration_buckets: dict[str, int] = Field(default_factory=dict)
+    top_hook_start: Optional[str] = None
+    top_duration_bucket: Optional[str] = None
 
 
 class Recommendations(BaseModel):

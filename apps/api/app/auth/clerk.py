@@ -71,6 +71,7 @@ def verify_clerk_jwt(token: str) -> dict[str, Any]:
         algorithms=["RS256"],
         issuer=CLERK_JWT_ISSUER,
         audience=CLERK_AUDIENCE,
+        leeway=60,
         options={
             "require": ["exp", "iss", "sub"],
             "verify_aud": CLERK_AUDIENCE is not None,

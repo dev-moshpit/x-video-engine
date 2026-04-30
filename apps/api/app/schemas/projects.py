@@ -81,3 +81,27 @@ class PlanResponse(BaseModel):
     # or None when the list is empty. Frontend uses it to highlight
     # the recommended pick when the operator generated >1 variation.
     recommended_index: Optional[int] = None
+
+
+# ─── Phase 8: smart generate ────────────────────────────────────────────
+
+class SmartGenerateRequest(BaseModel):
+    """Smart generation: pick the best of N plans then enqueue render(s)."""
+    candidates: int = Field(3, ge=1, le=5)
+    render_top: int = Field(1, ge=0, le=3)
+    seed: Optional[int] = None
+
+
+class SmartGenerateResponse(BaseModel):
+    """Best-pick plan(s) + reasoning + the renders that were enqueued.
+
+    ``rendered`` is empty when ``render_top == 0`` (preview-only mode).
+    The frontend uses ``reasoning`` to show *why* the plan won so the
+    user trusts the auto-pick.
+    """
+    plans: list[GeneratedPlan]
+    best_index: int
+    best_plan: GeneratedPlan
+    reasoning: list[str] = Field(default_factory=list)
+    boosted_score: float = 0.0
+    rendered: list[RenderSummary] = Field(default_factory=list)
